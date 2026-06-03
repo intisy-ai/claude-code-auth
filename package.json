@@ -1,4 +1,4 @@
-﻿{
+{
     "name":  "claude-code-auth",
     "version":  "1.6.0",
     "description":  "Claude Pro Auth plugin for OpenCode and Claude Code.",
