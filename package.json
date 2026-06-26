@@ -1,6 +1,6 @@
 {
   "name": "claude-code-auth",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Claude Code subscription auth provider for OpenCode and Claude Code — multiple Claude accounts via OAuth, with subscription rate limits exposed to OpenCode.",
   "main": "dist/index.js",
   "type": "module",
@@ -10,9 +10,24 @@
     "type": "git",
     "url": "git+https://github.com/intisy-ai/claude-code-auth.git"
   },
-  "keywords": ["opencode", "claude", "claude-code", "anthropic", "oauth", "subscription", "provider", "auth"],
-  "engines": { "node": ">=20.0.0" },
-  "files": ["dist/", "README.md", "LICENSE"],
+  "keywords": [
+    "opencode",
+    "claude",
+    "claude-code",
+    "anthropic",
+    "oauth",
+    "subscription",
+    "provider",
+    "auth"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
     "claude-code-auth": "dist/cli.js"
   },
@@ -22,11 +37,26 @@
         "name": "claude-code",
         "handler": "dist/handler.js",
         "models": [
-          { "id": "claude-opus-4-6", "name": "Claude Opus 4.6 (Claude Code)" },
-          { "id": "claude-opus-4-6-thinking", "name": "Claude Opus 4.6 Thinking (Claude Code)" },
-          { "id": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6 (Claude Code)" },
-          { "id": "claude-sonnet-4-6-thinking", "name": "Claude Sonnet 4.6 Thinking (Claude Code)" },
-          { "id": "claude-haiku-4-5", "name": "Claude Haiku 4.5 (Claude Code)" }
+          {
+            "id": "claude-opus-4-6",
+            "name": "Claude Opus 4.6 (Claude Code)"
+          },
+          {
+            "id": "claude-opus-4-6-thinking",
+            "name": "Claude Opus 4.6 Thinking (Claude Code)"
+          },
+          {
+            "id": "claude-sonnet-4-6",
+            "name": "Claude Sonnet 4.6 (Claude Code)"
+          },
+          {
+            "id": "claude-sonnet-4-6-thinking",
+            "name": "Claude Sonnet 4.6 Thinking (Claude Code)"
+          },
+          {
+            "id": "claude-haiku-4-5",
+            "name": "Claude Haiku 4.5 (Claude Code)"
+          }
         ]
       }
     ]
