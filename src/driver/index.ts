@@ -4,7 +4,7 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { defineProvider, AccountManager, proxyManager } from "../../core-auth/dist/index.js";
+import { defineProvider, AccountManager, proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { prepareClaudeRequest, parseResetMs } from "../plugin/request.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
@@ -38,12 +38,28 @@ function errorResponse(status, message) {
   });
 }
 
+// Resolve the generic "Auto" model: if the request targets claude-code-auto, rewrite
+// the body's model to the TOP of the live Auto ranking (leaderboard #1, excluded
+// filtered). Resolved per-request so it always tracks the current ranking.
+function resolveAutoModel(bodyText, ctx) {
+  let obj;
+  try { obj = bodyText ? JSON.parse(bodyText) : null; } catch { return bodyText; }
+  const requested = String((obj && obj.model) || (ctx && ctx.model) || "");
+  const isAuto = requested === "claude-code-auto" || requested.replace(/^claude-code-/, "") === "auto";
+  if (!isAuto || !obj) return bodyText;
+  const top = getAutoCandidates("claude-code")[0];
+  if (!top) return bodyText;          // no ranking yet — leave as-is
+  obj.model = top;
+  return JSON.stringify(obj);
+}
+
 async function handle(request, ctx) {
   const log = (ctx && ctx.log) || (() => {});
 
   const url = request.url;
   let bodyText;
   try { bodyText = await request.clone().text(); } catch { bodyText = undefined; }
+  bodyText = resolveAutoModel(bodyText, ctx);
   const init = { method: request.method, headers: Object.fromEntries(request.headers), body: bodyText };
 
   const maxAttempts = getMaxAttempts(); // read per-request so config edits apply without a restart
