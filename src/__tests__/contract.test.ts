@@ -4,9 +4,10 @@ import { runPluginContract } from "../../core/src/testing.js";
 runPluginContract({
   name: "claude-code-auth",
   entry: "dist/index.js",
-  configName: "claude-code-auth",
+  configName: "claude-code",
   app: "both",
   commands: ["claude-code-auth-config", "claude-accounts"],
   deploy: "load",
   actions: [["accounts"]],
+  readme: true,
 });
