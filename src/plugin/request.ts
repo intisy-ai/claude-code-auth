@@ -61,9 +61,15 @@ export function prepareClaudeRequest(url, init, access) {
   headers["anthropic-beta"] = mergeBeta(headers["anthropic-beta"]);
   headers["content-type"] = "application/json";
 
+  // Node's undici rejects any body on a GET/HEAD request ("Request with GET/HEAD
+  // method cannot have body") — Bun tolerated it. Omit the body for those methods.
+  const method = init.method || "POST";
+  const forwardInit = { method, headers, body: bodyText };
+  if (method === "GET" || method === "HEAD") delete forwardInit.body;
+
   return {
     request: ANTHROPIC_API_BASE + path,
-    init: { method: init.method || "POST", headers, body: bodyText },
+    init: forwardInit,
     streaming,
   };
 }
