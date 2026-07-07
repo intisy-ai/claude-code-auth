@@ -105,6 +105,17 @@ async function handle(request, ctx) {
     }
     if (proxyOk) proxyManager.reportResult(proxyUrl, true, Date.now() - started);
 
+    // Capture the live subscription rate-limit headers (quota groundwork + schema probe).
+    // Anthropic returns anthropic-ratelimit-unified-* (status/reset and possibly
+    // remaining) — logged so we can design the quota pool view around what's real.
+    try {
+      const rl = [];
+      for (const [k, v] of response.headers.entries()) {
+        if (k.indexOf("ratelimit") >= 0 || k === "retry-after") rl.push(k + "=" + v);
+      }
+      if (rl.length) log("[quota] " + response.status + " " + (account.email || account.id) + " :: " + rl.join(" | "));
+    } catch {}
+
     if (isRateLimitStatus(response.status)) {
       lastResponse = response;
       manager.reportRateLimit(account.id, LANE, parseResetMs(response, attempt));
