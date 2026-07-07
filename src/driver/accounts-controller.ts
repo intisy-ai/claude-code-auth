@@ -102,7 +102,11 @@ async function verify(manager, view) {
     }
     if (response.status === 200 || response.status === 400 || response.status === 429) out("✓ " + name + ": verified");
     else if (response.status === 401) out("✗ " + name + ": token expired or revoked (401)");
-    else if (response.status === 403) out("✗ " + name + ": forbidden (403)");
+    else if (response.status === 403) {
+      // broken token (wrong scopes) — disable + flag for re-login so it isn't used
+      manager.mutate(view.id, (a) => { a.enabled = false; a.cooldownReason = "re-login required (token lacks inference scope)"; });
+      out("✗ " + name + ": disabled — re-login required (403 scope)");
+    }
     else out("✗ " + name + ": " + response.status);
   } catch (error) {
     out("✗ " + name + ": " + ((error && error.message) || error));
@@ -126,6 +130,8 @@ async function refreshToken(manager, view) {
 export function createClaudeAccounts(manager) {
   return accountControllerFromManager(manager, {
     status: claudeStatus,
+    // surface WHY an account is unusable (e.g. auto-disabled 403 -> "re-login required")
+    detail: (account) => (account.enabled === false && account.cooldownReason) ? account.cooldownReason : undefined,
     quota: claudeQuota,
     refreshQuota: () => refreshQuotaAll(manager),
     login: async () => {

@@ -122,6 +122,17 @@ async function handle(request, ctx) {
       continue; // token may be revoked; try another account
     }
 
+    if (response.status === 403) {
+      lastResponse = response;
+      // A 403 on /v1/messages with an OAuth token means the token is fundamentally
+      // broken (wrong scopes / console-host token, not a rate limit). Disable the
+      // account so selection skips it and the accounts view flags it for re-login,
+      // then try another account instead of surfacing a raw 403.
+      manager.mutate(account.id, (a) => { a.enabled = false; a.cooldownReason = "re-login required (token lacks inference scope)"; });
+      manager.reportError(account.id, attempt, "403 scope");
+      continue;
+    }
+
     if (response.ok) {
       manager.reportSuccess(account.id);
       return response; // already Anthropic format (incl. SSE) — pass through
