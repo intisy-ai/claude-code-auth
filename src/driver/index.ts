@@ -4,7 +4,7 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { defineProvider, AccountManager, proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
+import { defineProvider, AccountManager, proxyManager, getAutoCandidates, chatError } from "../../core-auth/dist/index.js";
 import { prepareClaudeRequest, parseResetMs } from "../plugin/request.js";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
@@ -67,7 +67,16 @@ async function handle(request, ctx) {
   let lastResponse = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const acquired = await manager.acquire(LANE);
-    if (!acquired || !acquired.account) return errorResponse(503, "No available Claude account. Run `claude-code-auth login`.");
+    if (!acquired || !acquired.account) {
+      const enabled = manager.list().filter((a) => a.enabled !== false).length;
+      // No ENABLED account at all -> retrying can never help, so return a TERMINAL 400
+      // (chatError) — Claude Code retries 5xx/429 but stops on a 4xx. A raw 503 here
+      // just loops "attempt N/10". If accounts exist but are only cooling down, keep
+      // the retryable 503 so a lifted cooldown can serve.
+      return enabled === 0
+        ? chatError("No Claude account available — all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.", { status: 400 })
+        : errorResponse(503, "No Claude account free right now (all rate-limited). Try again shortly.");
+    }
     const account = acquired.account;
     const access = acquired.access;
     if (!access) { manager.reportError(account.id, attempt, "missing access token"); continue; }
