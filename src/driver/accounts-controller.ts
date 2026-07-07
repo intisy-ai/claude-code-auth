@@ -46,21 +46,23 @@ function claudeQuota(account) {
   return pools.length ? pools : undefined;
 }
 
-// On-demand refresh: a tiny max_tokens:1 ping per account whose response headers
-// carry current pool state (works even when rate-limited — the 429 still reports it).
+// On-demand refresh: a tiny max_tokens:1 ping whose response headers carry current
+// pool state (works even when rate-limited — the 429 still reports it).
+async function refreshQuotaOne(manager, accountId) {
+  const access = await manager.ensureAccess(accountId);
+  if (!access) return;
+  const res = await fetch(ANTHROPIC_API_BASE + "/v1/messages", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + access, "anthropic-version": ANTHROPIC_VERSION, "anthropic-beta": ANTHROPIC_OAUTH_BETA, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "claude-haiku-4-5", max_tokens: 1, system: [{ type: "text", text: CLAUDE_CODE_SYSTEM }], messages: [{ role: "user", content: "ping" }] }),
+  });
+  captureQuota(manager, accountId, res.headers);
+}
+
 async function refreshQuotaAll(manager) {
   for (const account of manager.list()) {
     if (account.enabled === false) continue;
-    try {
-      const access = await manager.ensureAccess(account.id);
-      if (!access) continue;
-      const res = await fetch(ANTHROPIC_API_BASE + "/v1/messages", {
-        method: "POST",
-        headers: { Authorization: "Bearer " + access, "anthropic-version": ANTHROPIC_VERSION, "anthropic-beta": ANTHROPIC_OAUTH_BETA, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-haiku-4-5", max_tokens: 1, system: [{ type: "text", text: CLAUDE_CODE_SYSTEM }], messages: [{ role: "user", content: "ping" }] }),
-      });
-      captureQuota(manager, account.id, res.headers);
-    } catch {}
+    try { await refreshQuotaOne(manager, account.id); } catch {}
   }
 }
 
@@ -140,6 +142,7 @@ export function createClaudeAccounts(manager) {
     },
     actions: () => [{ label: "Verify all accounts", run: () => verifyAll(manager) }],
     accountActions: (view) => [
+      { label: "Refresh quota", run: () => refreshQuotaOne(manager, view.id) },
       { label: "Verify access", run: () => verify(manager, view) },
       { label: "Refresh token", run: () => refreshToken(manager, view) },
     ],
