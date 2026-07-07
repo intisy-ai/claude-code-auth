@@ -4,13 +4,13 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { defineProvider, AccountManager, proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
+import { defineProvider, AccountManager, proxyManager, getAutoCandidates, chatError } from "../../core-auth/dist/index.js";
 import { prepareClaudeRequest, parseResetMs } from "../plugin/request.js";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
 import { login, loginFlow } from "./login.js";
-import { createClaudeAccounts } from "./accounts-controller.js";
+import { createClaudeAccounts, captureQuota } from "./accounts-controller.js";
 import {
   getMaxAttempts,
   getSelection,
@@ -105,16 +105,9 @@ async function handle(request, ctx) {
     }
     if (proxyOk) proxyManager.reportResult(proxyUrl, true, Date.now() - started);
 
-    // Capture the live subscription rate-limit headers (quota groundwork + schema probe).
-    // Anthropic returns anthropic-ratelimit-unified-* (status/reset and possibly
-    // remaining) — logged so we can design the quota pool view around what's real.
-    try {
-      const rl = [];
-      for (const [k, v] of response.headers.entries()) {
-        if (k.indexOf("ratelimit") >= 0 || k === "retry-after") rl.push(k + "=" + v);
-      }
-      if (rl.length) log("[quota] " + response.status + " " + (account.email || account.id) + " :: " + rl.join(" | "));
-    } catch {}
+    // Capture the subscription rate-limit pools (5h + 7d) from this response so the
+    // Quota view shows real usage — every response carries the unified-* headers.
+    captureQuota(manager, account.id, response.headers);
 
     if (isRateLimitStatus(response.status)) {
       lastResponse = response;
@@ -137,6 +130,14 @@ async function handle(request, ctx) {
     return response; // non-retryable upstream error -> surface as-is
   }
 
+  // All accounts exhausted. If they're rate-limited, return a marked rate-limit error
+  // (x-hub-rate-limited + retry-after) so the loader proxy can advance to a fallback
+  // model; with no fallback it surfaces this consistent "resets in ~Xm" message.
+  const nextAt = manager.nextAvailableAt(LANE);
+  if (nextAt && nextAt > Date.now()) {
+    const mins = Math.max(1, Math.round((nextAt - Date.now()) / 60000));
+    return chatError("All Claude accounts are rate-limited — try again in ~" + mins + "m.", { status: 429, rateLimited: true, retryAfterMs: nextAt - Date.now() });
+  }
   return lastResponse || errorResponse(502, "Claude request failed after " + maxAttempts + " attempts");
 }
 
