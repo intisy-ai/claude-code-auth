@@ -7,7 +7,13 @@
 
 export const CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
-export const CLAUDE_AUTHORIZE_URL = "https://platform.claude.com/oauth/authorize";
+// AUTHORIZE must be claude.ai — that host grants a Pro/Max SUBSCRIPTION token with a
+// real user:inference entitlement. platform.claude.com/oauth/authorize is the Console
+// surface: it mints an API-key-mode token that /v1/messages rejects with
+// "OAuth token does not meet scope requirement (user:inference…)" (403). The host is
+// the determinant, not the scope. Token exchange + callback stay on platform.claude.com
+// (rebranded console.anthropic.com; both resolve).
+export const CLAUDE_AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 export const CLAUDE_TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
 export const CLAUDE_REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
 
