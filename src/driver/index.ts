@@ -4,7 +4,7 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { defineProvider, AccountManager, proxyManager, getAutoCandidates, chatError } from "../../core-auth/dist/index.js";
+import { defineProvider, AccountManager, proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { prepareClaudeRequest, parseResetMs } from "../plugin/request.js";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
@@ -130,14 +130,10 @@ async function handle(request, ctx) {
     return response; // non-retryable upstream error -> surface as-is
   }
 
-  // All accounts exhausted. If they're rate-limited, return a marked rate-limit error
-  // (x-hub-rate-limited + retry-after) so the loader proxy can advance to a fallback
-  // model; with no fallback it surfaces this consistent "resets in ~Xm" message.
-  const nextAt = manager.nextAvailableAt(LANE);
-  if (nextAt && nextAt > Date.now()) {
-    const mins = Math.max(1, Math.round((nextAt - Date.now()) / 60000));
-    return chatError("All Claude accounts are rate-limited — try again in ~" + mins + "m.", { status: 429, rateLimited: true, retryAfterMs: nextAt - Date.now() });
-  }
+  // All accounts exhausted — return the REAL upstream 429 (with Anthropic's
+  // anthropic-ratelimit-unified-* headers) so Claude Code renders its native
+  // rate-limit UI ("session limit — resets X"). The loader proxy detects the 429 for
+  // fallback and normalizes non-claude providers into this same native shape.
   return lastResponse || errorResponse(502, "Claude request failed after " + maxAttempts + " attempts");
 }
 
