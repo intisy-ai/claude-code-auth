@@ -6,6 +6,7 @@
 
 import { defineProvider, AccountManager, proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { prepareClaudeRequest, parseResetMs } from "../plugin/request.js";
+import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
 import { login, loginFlow } from "./login.js";
@@ -128,12 +129,48 @@ async function handle(request, ctx) {
   return lastResponse || errorResponse(502, "Claude request failed after " + maxAttempts + " attempts");
 }
 
+// Live model catalog: pull the account's available models from Anthropic /v1/models
+// so "Refresh models" (and login) actually update the list instead of re-reading the
+// static fallback. core-auth's resolveProviderModels calls this when an account exists
+// and falls back to the static `models` above on null/failure. Uses ensureAccess (no
+// rotation side effects) rather than acquire().
+async function fetchModels(ctx) {
+  const log = (ctx && ctx.log) || (() => {});
+  let access;
+  try {
+    const accounts = (manager.load().accounts || []).filter((a) => a && a.enabled !== false);
+    if (!accounts.length) return null; // no authed account -> static fallback
+    access = await manager.ensureAccess(accounts[0].id);
+  } catch (error) { log("fetchModels: could not get access token: " + error); return null; }
+  if (!access) return null;
+  try {
+    const res = await fetch(ANTHROPIC_API_BASE + "/v1/models?limit=1000", {
+      headers: {
+        authorization: "Bearer " + access,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "anthropic-beta": ANTHROPIC_OAUTH_BETA,
+      },
+    });
+    if (!res.ok) { log("fetchModels: /v1/models returned " + res.status); return null; }
+    const data = await res.json();
+    const list = (data && data.data) || [];
+    const out = {};
+    for (const model of list) {
+      if (!model || !model.id || !String(model.id).startsWith("claude-")) continue;
+      out[model.id] = { name: (model.display_name || model.id) + " (Claude Code)" };
+    }
+    if (!Object.keys(out).length) return null;
+    return { models: out };
+  } catch (error) { log("fetchModels failed: " + error); return null; }
+}
+
 export const driver = {
   id: PROVIDER_ID,
   label: "Claude Code",
   opencodeProvider: "claude-code", // own namespace so OpenCode routes through our loader
   opencodeNpm: "@ai-sdk/anthropic",
   models,
+  fetchModels,
   sorts: ["leaderboard"],   // opt into core's built-in quality sort (manual is automatic)
   handle,
   login,

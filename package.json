@@ -38,20 +38,12 @@
         "handler": "dist/handler.js",
         "models": [
           {
-            "id": "claude-opus-4-6",
-            "name": "Claude Opus 4.6 (Claude Code)"
+            "id": "claude-opus-4-8",
+            "name": "Claude Opus 4.8 (Claude Code)"
           },
           {
-            "id": "claude-opus-4-6-thinking",
-            "name": "Claude Opus 4.6 Thinking (Claude Code)"
-          },
-          {
-            "id": "claude-sonnet-4-6",
-            "name": "Claude Sonnet 4.6 (Claude Code)"
-          },
-          {
-            "id": "claude-sonnet-4-6-thinking",
-            "name": "Claude Sonnet 4.6 Thinking (Claude Code)"
+            "id": "claude-sonnet-5",
+            "name": "Claude Sonnet 5 (Claude Code)"
           },
           {
             "id": "claude-haiku-4-5",
