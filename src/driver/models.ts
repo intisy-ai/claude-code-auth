@@ -1,12 +1,8 @@
 // @ts-nocheck
-// STATIC FALLBACK Claude model catalog (core-auth ProviderModel shape { name }).
-// The driver also implements fetchModels() (driver/index.ts) which pulls the live
-// list from Anthropic /v1/models on login / "Refresh models"; this constant is the
-// displayed default when no account is authed yet or the live fetch fails, so it
-// must stay current. Ids are the Anthropic model ids the subscription serves.
-// Declaration order = the default manual/catalog order.
-export const models = {
-  "claude-opus-4-8": { name: "Claude Opus 4.8 (Claude Code)" },
-  "claude-sonnet-5": { name: "Claude Sonnet 5 (Claude Code)" },
-  "claude-haiku-4-5": { name: "Claude Haiku 4.5 (Claude Code)" },
-};
+// NO static/hardcoded Claude model catalog. Hardcoded model ids go stale as Anthropic
+// ships/retires models (a false list that no longer works is worse than an empty one),
+// so the catalog is live-only: driver/index.ts `fetchModels()` pulls the real list from
+// Anthropic /v1/models on login / "Refresh models" and it's cached. Before login there
+// are simply no models to show (the account menu hides the Models section until a fetch
+// succeeds). Keeping the export (empty) so importers stay valid.
+export const models = {};
