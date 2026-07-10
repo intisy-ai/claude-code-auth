@@ -11,25 +11,46 @@ function out(message) {
 }
 
 // --- Quota (subscription rate-limit pools) ----------------------------------
-// Anthropic returns unified rate-limit headers on EVERY response: a 5-hour and a
-// 7-day pool, each with utilization (0..>1), reset (epoch s) and status. We capture
-// them per account so the Quota view shows real usage without a dedicated quota API.
-function readPool(headers, prefix) {
-  const util = parseFloat(headers.get("anthropic-ratelimit-unified-" + prefix + "-utilization"));
-  const reset = parseInt(headers.get("anthropic-ratelimit-unified-" + prefix + "-reset"), 10);
-  const status = headers.get("anthropic-ratelimit-unified-" + prefix + "-status") || undefined;
-  if (Number.isNaN(util) && Number.isNaN(reset)) return null;
-  return { utilization: Number.isNaN(util) ? null : util, reset: Number.isNaN(reset) ? null : reset * 1000, status };
+// Anthropic returns unified rate-limit headers on EVERY response, one pool per
+// bucket (5h, 7d, and any Anthropic adds later — e.g. a per-model weekly bucket
+// for Fable), each with utilization (0..>1), reset (epoch s) and status. Buckets
+// are DISCOVERED from the header names, never hardcoded, so new pools appear
+// automatically. We capture them per account so the Quota view shows real usage
+// without a dedicated quota API.
+const UNIFIED_POOL_HEADER = /^anthropic-ratelimit-unified-(.+)-(utilization|reset|status)$/;
+
+function readPools(headers) {
+  const pools = {};
+  headers.forEach((value, name) => {
+    const m = UNIFIED_POOL_HEADER.exec(String(name).toLowerCase());
+    if (!m) return;   // ignores the bucketless "…-unified-reset" lane-timing header
+    const pool = pools[m[1]] || (pools[m[1]] = {});
+    if (m[2] === "utilization") { const v = parseFloat(value); if (!Number.isNaN(v)) pool.utilization = v; }
+    else if (m[2] === "reset") { const v = parseInt(value, 10); if (!Number.isNaN(v)) pool.reset = v * 1000; }
+    else if (value) pool.status = value;
+  });
+  for (const key of Object.keys(pools)) {
+    if (typeof pools[key].utilization !== "number" && typeof pools[key].reset !== "number") delete pools[key];
+  }
+  return pools;
 }
 
 // Persist the pools captured from a response's headers onto the account.
 export function captureQuota(manager, accountId, headers) {
   try {
-    const fiveHour = readPool(headers, "5h");
-    const sevenDay = readPool(headers, "7d");
-    if (!fiveHour && !sevenDay) return;
-    manager.mutate(accountId, (a) => { a.cachedQuota = { fiveHour, sevenDay, at: Date.now() }; });
+    const pools = readPools(headers);
+    if (!Object.keys(pools).length) return;
+    manager.mutate(accountId, (a) => { a.cachedQuota = { pools, at: Date.now() }; });
   } catch {}
+}
+
+// bucket key -> human label: "5h" -> "5-hour", "7d" -> "7-day"; a model-scoped
+// bucket like "7d-fable" -> "7-day (Fable)"; anything unrecognized passes through.
+function poolLabel(bucket) {
+  const m = /^(\d+)([hd])(?:[-_](.+))?$/.exec(bucket);
+  if (!m) return bucket;
+  const base = m[1] + (m[2] === "h" ? "-hour" : "-day");
+  return m[3] ? base + " (" + m[3].charAt(0).toUpperCase() + m[3].slice(1) + ")" : base;
 }
 
 // Map the stored pools to core-auth's quota shape [{label, remainingFraction, resetTime}].
@@ -41,8 +62,8 @@ function claudeQuota(account) {
     if (!pool || typeof pool.utilization !== "number") return;
     pools.push({ label, remainingFraction: Math.max(0, Math.min(1, 1 - pool.utilization)), resetTime: pool.reset });
   };
-  add(q.fiveHour, "5-hour");
-  add(q.sevenDay, "7-day");
+  if (q.pools) for (const [bucket, pool] of Object.entries(q.pools).sort(([a], [b]) => a.localeCompare(b))) add(pool, poolLabel(bucket));
+  else { add(q.fiveHour, "5-hour"); add(q.sevenDay, "7-day"); }   // pre-discovery cached shape
   return pools.length ? pools : undefined;
 }
 
@@ -106,7 +127,7 @@ async function verify(manager, view) {
     else if (response.status === 401) out("✗ " + name + ": token expired or revoked (401)");
     else if (response.status === 403) {
       // broken token (wrong scopes) — disable + flag for re-login so it isn't used
-      manager.mutate(view.id, (a) => { a.enabled = false; a.cooldownReason = "re-login required (token lacks inference scope)"; });
+      manager.mutate(view.id, (a) => { a.enabled = false; a.disabledReason = "re-login required (token lacks inference scope)"; });
       out("✗ " + name + ": disabled — re-login required (403 scope)");
     }
     else out("✗ " + name + ": " + response.status);
@@ -116,7 +137,10 @@ async function verify(manager, view) {
 }
 
 async function verifyAll(manager) {
-  for (const account of manager.list()) await verify(manager, { id: account.id, email: account.email });
+  for (const account of manager.list()) {
+    if (account.enabled === false) { out("- " + (account.email || account.id) + ": skipped (disabled)"); continue; }
+    await verify(manager, { id: account.id, email: account.email });
+  }
   out("Done.");
 }
 
@@ -132,8 +156,10 @@ async function refreshToken(manager, view) {
 export function createClaudeAccounts(manager) {
   return accountControllerFromManager(manager, {
     status: claudeStatus,
-    // surface WHY an account is unusable (e.g. auto-disabled 403 -> "re-login required")
-    detail: (account) => (account.enabled === false && account.cooldownReason) ? account.cooldownReason : undefined,
+    // surface WHY the system disabled an account (e.g. 403 -> "re-login required").
+    // Only disabledReason renders: cooldownReason holds transient raw error text
+    // (e.g. "TypeError: fetch failed") that must never leak into the account row.
+    detail: (account) => (account.enabled === false && account.disabledReason) ? account.disabledReason : undefined,
     quota: claudeQuota,
     refreshQuota: () => refreshQuotaAll(manager),
     login: async () => {

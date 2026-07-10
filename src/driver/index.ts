@@ -137,7 +137,7 @@ async function handle(request, ctx) {
       // broken (wrong scopes / console-host token, not a rate limit). Disable the
       // account so selection skips it and the accounts view flags it for re-login,
       // then try another account instead of surfacing a raw 403.
-      manager.mutate(account.id, (a) => { a.enabled = false; a.cooldownReason = "re-login required (token lacks inference scope)"; });
+      manager.mutate(account.id, (a) => { a.enabled = false; a.disabledReason = "re-login required (token lacks inference scope)"; });
       manager.reportError(account.id, attempt, "403 scope");
       continue;
     }
