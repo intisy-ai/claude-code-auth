@@ -54,6 +54,21 @@ function resolveAutoModel(bodyText, ctx) {
   return JSON.stringify(obj);
 }
 
+// The router's assigned model (ctx.model) is authoritative for this request: if the
+// body still carries a different id (e.g. a foreign provider's id injected via
+// ANTHROPIC_DEFAULT_*_MODEL while the tier is mapped here), forwarding it verbatim
+// makes Anthropic 404 ("model may not exist"). Rewrite it to the assignment.
+function applyAssignedModel(bodyText, ctx, log) {
+  const assigned = String((ctx && ctx.model) || "");
+  if (!assigned || assigned === "claude-code-auto" || assigned.replace(/^claude-code-/, "") === "auto") return bodyText;
+  let obj;
+  try { obj = bodyText ? JSON.parse(bodyText) : null; } catch { return bodyText; }
+  if (!obj || !obj.model || obj.model === assigned) return bodyText;
+  log("model rewrite: " + obj.model + " -> " + assigned + " (tier assignment)");
+  obj.model = assigned;
+  return JSON.stringify(obj);
+}
+
 async function handle(request, ctx) {
   const log = (ctx && ctx.log) || (() => {});
 
@@ -61,6 +76,7 @@ async function handle(request, ctx) {
   let bodyText;
   try { bodyText = await request.clone().text(); } catch { bodyText = undefined; }
   bodyText = resolveAutoModel(bodyText, ctx);
+  bodyText = applyAssignedModel(bodyText, ctx, log);
   const init = { method: request.method, headers: Object.fromEntries(request.headers), body: bodyText };
 
   const maxAttempts = getMaxAttempts(); // read per-request so config edits apply without a restart
