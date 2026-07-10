@@ -35,13 +35,57 @@ function readPools(headers) {
   return pools;
 }
 
-// Persist the pools captured from a response's headers onto the account.
+// Persist the pools captured from a response's headers onto the account. MERGES
+// into the existing pools: headers only carry the buckets relevant to that request
+// (a per-model weekly bucket appears only on requests to that model), so replacing
+// wholesale would keep dropping pools the usage endpoint discovered.
 export function captureQuota(manager, accountId, headers) {
   try {
     const pools = readPools(headers);
     if (!Object.keys(pools).length) return;
-    manager.mutate(accountId, (a) => { a.cachedQuota = { pools, at: Date.now() }; });
+    manager.mutate(accountId, (a) => {
+      const prev = (a.cachedQuota && a.cachedQuota.pools) || {};
+      a.cachedQuota = { pools: { ...prev, ...pools }, at: Date.now() };
+    });
   } catch {}
+}
+
+// Canonical bucket key for one entry of the usage endpoint's limits[] array, kept
+// aligned with the header bucket names so both sources describe the same pools:
+// session -> 5h, weekly_all -> 7d, weekly_scoped(Fable) -> 7d-fable, else generic.
+function bucketOfLimit(limit) {
+  if (!limit || typeof limit !== "object") return null;
+  const scope = limit.scope && limit.scope.model && (limit.scope.model.display_name || limit.scope.model.id);
+  const scopeKey = scope ? String(scope).toLowerCase().replace(/\s+/g, "-") : "";
+  if (limit.kind === "session") return "5h";
+  if (limit.kind === "weekly_all") return "7d";
+  if (limit.group === "weekly" && scopeKey) return "7d-" + scopeKey;
+  const base = String(limit.kind || limit.group || "");
+  return base ? base + (scopeKey ? "-" + scopeKey : "") : null;
+}
+
+// Authoritative pool list from the OAuth usage endpoint — the same source Claude
+// Code's /usage screen reads. Unlike response headers it returns EVERY pool,
+// including per-model weekly buckets (e.g. Fable), without needing a request to
+// that model. Returns null on any failure (caller falls back to the header ping).
+async function fetchUsagePools(access) {
+  const res = await fetch(ANTHROPIC_API_BASE + "/api/oauth/usage", {
+    headers: { Authorization: "Bearer " + access, "anthropic-beta": ANTHROPIC_OAUTH_BETA, "anthropic-version": ANTHROPIC_VERSION },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || !Array.isArray(data.limits)) return null;
+  const pools = {};
+  for (const limit of data.limits) {
+    const bucket = bucketOfLimit(limit);
+    if (!bucket || typeof limit.percent !== "number") continue;
+    pools[bucket] = {
+      utilization: limit.percent / 100,
+      reset: limit.resets_at ? Date.parse(limit.resets_at) : null,
+      status: limit.severity || undefined,
+    };
+  }
+  return Object.keys(pools).length ? pools : null;
 }
 
 // bucket key -> human label: "5h" -> "5-hour", "7d" -> "7-day"; a model-scoped
@@ -67,11 +111,18 @@ function claudeQuota(account) {
   return pools.length ? pools : undefined;
 }
 
-// On-demand refresh: a tiny max_tokens:1 ping whose response headers carry current
-// pool state (works even when rate-limited — the 429 still reports it).
+// On-demand refresh: the usage endpoint first (full, authoritative pool list —
+// REPLACES the cache); fall back to a tiny max_tokens:1 ping whose response
+// headers carry the request-relevant pools (merged into the cache).
 async function refreshQuotaOne(manager, accountId) {
   const access = await manager.ensureAccess(accountId);
   if (!access) return;
+  let pools = null;
+  try { pools = await fetchUsagePools(access); } catch {}
+  if (pools) {
+    manager.mutate(accountId, (a) => { a.cachedQuota = { pools, at: Date.now() }; });
+    return;
+  }
   const res = await fetch(ANTHROPIC_API_BASE + "/v1/messages", {
     method: "POST",
     headers: { Authorization: "Bearer " + access, "anthropic-version": ANTHROPIC_VERSION, "anthropic-beta": ANTHROPIC_OAUTH_BETA, "Content-Type": "application/json" },
