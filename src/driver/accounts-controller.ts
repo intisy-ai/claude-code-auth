@@ -204,6 +204,14 @@ async function refreshToken(manager, view) {
   }
 }
 
+// Quota still remaining? (any unified pool below 100% utilization). Unknown -> false.
+export function accountHasQuota(account) {
+  const q = account && account.cachedQuota;
+  const pools = q && q.pools;
+  if (!pools) return false;
+  return Object.values(pools).some((p) => p && typeof p.utilization === "number" && p.utilization < 1);
+}
+
 export function createClaudeAccounts(manager) {
   return accountControllerFromManager(manager, {
     status: claudeStatus,

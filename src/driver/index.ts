@@ -10,7 +10,7 @@ import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
 import { login, loginFlow } from "./login.js";
-import { createClaudeAccounts, captureQuota } from "./accounts-controller.js";
+import { createClaudeAccounts, captureQuota, accountHasQuota } from "./accounts-controller.js";
 import {
   getMaxAttempts,
   getSelection,
@@ -97,7 +97,7 @@ async function handle(request, ctx) {
     const access = acquired.access;
     if (!access) { manager.reportError(account.id, attempt, "missing access token"); continue; }
 
-    const proxyUrl = proxyManager.selectForAccount(account.id);
+    const proxyUrl = proxyManager.selectForAccount(account.id, PROVIDER_ID);
 
     let prepared;
     try { prepared = prepareClaudeRequest(url, init, access); }
@@ -137,7 +137,10 @@ async function handle(request, ctx) {
     if (isRateLimitStatus(response.status)) {
       lastResponse = response;
       manager.reportRateLimit(account.id, LANE, parseResetMs(response, attempt));
-      if (proxyUrl) proxyManager.reportRateLimit(proxyUrl);
+      if (proxyUrl) {
+        const fresh = manager.list().find((a) => a.id === account.id) || account;
+        proxyManager.reportRateLimit(proxyUrl, { ipSuspected: accountHasQuota(fresh) });
+      }
       continue; // rotate account
     }
 
