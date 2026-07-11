@@ -213,13 +213,13 @@ export function createClaudeAccounts(manager) {
     detail: (account) => (account.enabled === false && account.disabledReason) ? account.disabledReason : undefined,
     quota: claudeQuota,
     refreshQuota: () => refreshQuotaAll(manager),
+    refreshQuotaOne: (id) => refreshQuotaOne(manager, id),
     login: async () => {
       const account = await login({ log: (message) => process.stderr.write(message + "\n") });
       return account ? { id: account.id, email: account.email, status: "active", enabled: true } : null;
     },
     actions: () => [{ label: "Verify all accounts", run: () => verifyAll(manager) }],
     accountActions: (view) => [
-      { label: "Refresh quota", run: () => refreshQuotaOne(manager, view.id) },
       { label: "Verify access", run: () => verify(manager, view) },
       { label: "Refresh token", run: () => refreshToken(manager, view) },
     ],
