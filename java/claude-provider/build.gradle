@@ -1,0 +1,9 @@
+dependencies {
+    // Only the JsonCodec SPI is needed (io.github.intisy.ai.shared.spi.JsonCodec) -- T6a's two
+    // classes do NOT implement the host-provided Provider/ProxyHandler SPI (that's Bucket B,
+    // out of scope), so there is no "keep the shipped jar thin" concern stub-provider had.
+    // compileOnly still keeps this module's own build artifact from bundling :routing's classes;
+    // testImplementation re-adds it so test code can construct a JsonCodec-typed reference too.
+    compileOnly project(":routing")
+    testImplementation project(":routing")
+}

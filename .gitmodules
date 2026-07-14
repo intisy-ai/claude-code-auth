@@ -5,3 +5,6 @@
 	path = core
 	url = https://github.com/intisy-ai/core
 	branch = main
+[submodule "core-proxy"]
+	path = core-proxy
+	url = https://github.com/intisy-ai/core-proxy.git

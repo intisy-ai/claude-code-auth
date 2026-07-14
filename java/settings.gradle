@@ -1,0 +1,29 @@
+rootProject.name = "claude-code-auth-java"
+
+// claude-code-auth's Java side: T6a ports the two SAFEST pure-logic pieces of the TS driver
+// (AnthropicRequestTranslator <- src/plugin/request.ts, ClaudeQuotaParser <- src/driver/
+// accounts-controller.ts) to transpilable Java, needing only the JsonCodec SPI. Mirrors
+// stub-auth's java/settings.gradle exactly (see F:/Documents/GitHub/javascript/providers/
+// stub-auth/java/settings.gradle) -- same aliasing technique for :routing/:teavm.
+//
+// core-proxy is a DIRECT submodule of claude-code-auth (../core-proxy from here, i.e.
+// claude-code-auth/core-proxy) -- not core-auth's own nested copy. :routing is aliased in
+// exactly the way stub-auth's own settings.gradle aliases it (project path preserved, just a
+// different projectDir) so the SAME coordinates line up across every provider's java/ module.
+include ":routing"
+project(":routing").projectDir = file("../core-proxy/java/routing")
+
+// :teavm - core-proxy's own TeaVM js-base (SimpleJsonCodec/etc), aliased in exactly like :routing
+// above so :claude-teavm can depend on it with a plain project(":teavm") reference and reuse
+// SimpleJsonCodec rather than duplicate it.
+include ":teavm"
+project(":teavm").projectDir = file("../core-proxy/java/teavm")
+
+// :claude-provider - AnthropicRequestTranslator + ClaudeQuotaParser (T6a). Bucket B (handle/
+// fetch/quota-refresh via HttpClient/Store) and Bucket C (login/TUI/opencode-merge) stay TS --
+// out of scope for this module, see ../.superpowers/port-grounding-map.md.
+include ":claude-provider"
+
+// :claude-teavm - trivial TeaVM JS export surface proving both T6a classes are
+// TeaVM-transpilable (generateJavaScript). Reuses :teavm's js-base instead of duplicating it.
+include ":claude-teavm"

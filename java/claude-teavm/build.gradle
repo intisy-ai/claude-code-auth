@@ -1,0 +1,44 @@
+import org.teavm.gradle.api.JSModuleType
+import org.teavm.gradle.api.OptimizationLevel
+
+plugins {
+    id "org.teavm" version "0.15.0"
+}
+
+dependencies {
+    // :claude-provider -- AnthropicRequestTranslator/ClaudeQuotaParser are the transpilable
+    // "core" this export reuses verbatim. :claude-provider itself only `compileOnly`s :routing
+    // (keeping its shipped jar thin) -- that does NOT propagate to us, so :routing is declared
+    // again below for the SPI types (JsonCodec) ClaudeProviderJs references directly.
+    implementation project(":claude-provider")
+    implementation project(":routing")
+    // core-proxy's own :teavm js-base (SimpleJsonCodec) -- reused rather than duplicated;
+    // ClaudeProviderJs lives in the SAME package (io.github.intisy.ai.js) so it can reference
+    // SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.
+    implementation project(":teavm")
+    teavm teavm.libs.jsoApis
+}
+
+// The root subprojects{} block pins Java 8 (sourceCompatibility/targetCompatibility +
+// compileJava --release 8) for portability of :claude-provider. TeaVM 0.15.0's own classlib/
+// jso-apis/extension-spi artifacts publish a minimum JVM-version metadata of 11-17, so
+// :claude-teavm needs a newer compile target than :claude-provider -- override both the
+// extension's compatibility (fixes Gradle's dependency-resolution JVM-version attribute
+// matching) and the compileJava task's --release option. Mirrors stub-auth's stub-teavm/
+// build.gradle exactly (which itself mirrors core-proxy/java/teavm/build.gradle).
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.named("compileJava") {
+    options.release = 17
+}
+
+teavm.js {
+    mainClass = "io.github.intisy.ai.js.ClaudeProviderJs"
+    moduleType = JSModuleType.ES2015
+    obfuscated = false
+    optimization = OptimizationLevel.NONE
+    targetFileName = "claude-provider.js"
+}

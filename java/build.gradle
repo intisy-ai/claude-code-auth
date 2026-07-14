@@ -1,0 +1,35 @@
+// claude-code-auth's Java module -- self-contained Gradle build living alongside claude-code-auth's
+// TS (../src, ../package.json), mirroring stub-auth's java/build.gradle (same pattern core-proxy's
+// own java/build.gradle uses). Deliberately does NOT reuse ai-java's root build.gradle (its
+// io.github.intisy.online-gradle/github-gradle plugins are ai-java-repo-specific publishing
+// concerns, out of scope for a provider module) -- just plain java-library + JUnit.
+subprojects {
+    apply plugin: "java-library"
+
+    group = "io.github.intisy"
+    version = "0.1.0"
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    // Validate the MAIN compilation against the Java 8 API surface (not just source syntax).
+    // compileTestJava is excluded: tests may legitimately use newer JDK APIs.
+    tasks.matching { it.name == "compileJava" }.configureEach {
+        options.release = 8
+    }
+
+    dependencies {
+        testImplementation "org.junit.jupiter:junit-jupiter:5.10.1"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
