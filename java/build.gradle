@@ -25,6 +25,15 @@ subprojects {
         options.release = 8
     }
 
+    // Force UTF-8 source encoding for every compile task. Sources carry non-ASCII literals (e.g.
+    // the em dash in ClaudeHandleOrchestrator's NO_ACCOUNT_MESSAGE); without this, javac falls
+    // back to the platform charset (windows-1252 on Windows), misreading UTF-8 bytes and baking
+    // mojibake into the class constants (which TeaVM then emits verbatim). Applies to both
+    // compileJava and compileTestJava so the JVM tests and the TeaVM output agree with the source.
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = "UTF-8"
+    }
+
     dependencies {
         testImplementation "org.junit.jupiter:junit-jupiter:5.10.1"
     }
