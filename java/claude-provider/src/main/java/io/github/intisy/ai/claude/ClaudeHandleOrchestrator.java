@@ -152,6 +152,15 @@ public final class ClaudeHandleOrchestrator {
     public static final class OrchestratorConfig {
         /** {@code getMaxAttempts()} (index.ts:82) -- read per-request so a config edit applies without a restart. */
         public int maxAttempts;
+        /**
+         * {@code getDefaultCooldownSeconds()} (settings.ts:38) -- base seconds for the exponential
+         * backoff applied to a 429/529 that carries NO reset header. Doubles per attempt. Defaults
+         * mirror settings.ts's DEFAULT_COOLDOWN_SECONDS/MAX_COOLDOWN_SECONDS so a config that omits
+         * them still backs off exactly like the TS path rather than collapsing to "reset = now".
+         */
+        public int defaultCooldownSeconds = 60;
+        /** {@code getMaxCooldownSeconds()} (settings.ts:44) -- cap the doubling backoff can grow to. */
+        public int maxCooldownSeconds = 900;
     }
 
     // ---- HandleDecision -----------------------------------------------------------------------
@@ -259,6 +268,12 @@ public final class ClaudeHandleOrchestrator {
             if (ClaudeModelRouting.isRateLimitStatus(result.status)) {
                 lastRef = result.attemptRef;
                 Long resetMs = AnthropicRequestTranslator.parseResetMs(result.headers, clock.now());
+                // T6a's parseResetMs deliberately drops request.ts:89-91's exponential-backoff
+                // fallback (it needs the cooldown config), returning null when neither the unified
+                // nor the retry-after header is present. The TS path NEVER passes null here -- it
+                // falls through to that backoff -- so replicate it inline to keep reportRateLimit
+                // byte-identical across paths (see computeBackoffResetMs).
+                if (resetMs == null) resetMs = computeBackoffResetMs(attempt, cfg);
                 accounts.reportRateLimit(accountId, LANE, resetMs);
                 continue; // rotate account
             }
@@ -291,6 +306,24 @@ public final class ClaudeHandleOrchestrator {
                 ? HandleDecision.serve(lastRef)
                 : HandleDecision.synthetic(502, plainJsonHeaders(),
                         errorResponseBody("Claude request failed after " + maxAttempts + " attempts"));
+    }
+
+    /**
+     * Exponential-backoff reset time (epoch ms) for a rate-limited response with NO reset header --
+     * the byte-exact port of request.ts:89-91:
+     * <pre>Date.now() + Math.min(getDefaultCooldownSeconds()*1000 * 2^attempt, getMaxCooldownSeconds()*1000)</pre>
+     * Computed in {@code double} to mirror JS number arithmetic exactly, then floored to a long
+     * epoch-ms; {@code Clock} supplies "now" (JS {@code Date.now()}) for test determinism.
+     *
+     * <p>core-auth's {@code RateLimitMath.calculateBackoffMs} is the CANONICAL backoff-math home,
+     * but its formula intentionally DIFFERS from this one (it adds random jitter by default and
+     * returns a relative DURATION, not an absolute epoch), so it cannot be reused here without
+     * breaking byte-parity with the TS {@code handle} path -- hence the inline replication.
+     */
+    private long computeBackoffResetMs(int attempt, OrchestratorConfig cfg) {
+        double raw = (double) cfg.defaultCooldownSeconds * 1000.0 * Math.pow(2, attempt);
+        double capped = Math.min(raw, (double) cfg.maxCooldownSeconds * 1000.0);
+        return clock.now() + (long) capped;
     }
 
     // ---- synthetic response bodies (core-auth src/errors.ts:13-34 / index.ts:35-40) -------------

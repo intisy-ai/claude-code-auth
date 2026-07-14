@@ -158,6 +158,41 @@ class ClaudeHandleOrchestratorTest {
     }
 
     @Test
+    void rateLimitWithNoResetHeader_appliesExponentialBackoff_byteMatchingRequestTs() {
+        // request.ts:89-91 fallback: a 429/529 with NO reset header -> reportRateLimit with
+        // Date.now() + min(defaultCooldown*1000 * 2^attempt, maxCooldown*1000). T6a's Java
+        // parseResetMs returns null here, so the orchestrator must supply this backoff itself.
+        long now = 1_700_000_000_000L;
+        RecordingAccountOps accounts = new RecordingAccountOps();
+        accounts.enabledCount = 3;
+        accounts.acquireQueue.add(new ClaudeHandleOrchestrator.Acquired("acc1", "tok1"));
+        accounts.acquireQueue.add(new ClaudeHandleOrchestrator.Acquired("acc2", "tok2"));
+        accounts.acquireQueue.add(new ClaudeHandleOrchestrator.Acquired("acc3", "tok3"));
+        ScriptedExecutor exec = new ScriptedExecutor();
+        // 429 with NO rate-limit reset header (and no retry-after) on the first two attempts.
+        exec.results.add(new ClaudeHandleOrchestrator.AttemptResult(429, headers(), false, "ref0"));
+        exec.results.add(new ClaudeHandleOrchestrator.AttemptResult(529, headers(), false, "ref1"));
+        exec.results.add(new ClaudeHandleOrchestrator.AttemptResult(200, headers(), false, "ref2"));
+
+        ClaudeHandleOrchestrator.HandleDecision decision = orchestrator(now).handle(inputs(), cfg(4), exec, accounts);
+
+        assertEquals(ClaudeHandleOrchestrator.HandleDecision.Kind.SERVE, decision.kind);
+        assertEquals("ref2", decision.attemptRef);
+        // attempt 0: now + 60_000*2^0 = 1_700_000_060_000; attempt 1: now + 60_000*2^1 = 1_700_000_120_000.
+        assertEquals(List.of(
+                "acquire(messages) -> acc1/tok1",
+                "captureQuota(acc1,{})",
+                "reportRateLimit(acc1,messages,1700000060000)",
+                "acquire(messages) -> acc2/tok2",
+                "captureQuota(acc2,{})",
+                "reportRateLimit(acc2,messages,1700000120000)",
+                "acquire(messages) -> acc3/tok3",
+                "captureQuota(acc3,{})",
+                "reportSuccess(acc3)"
+        ), accounts.calls);
+    }
+
+    @Test
     void unauthorizedThenForbiddenThenOk_disablesBeforeNextAcquire() {
         RecordingAccountOps accounts = new RecordingAccountOps();
         accounts.enabledCount = 3;

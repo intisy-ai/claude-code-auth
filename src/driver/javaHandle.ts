@@ -22,7 +22,7 @@ import { proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { manager } from "./index.js";
 import { prepareClaudeRequest } from "../plugin/request.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
-import { getMaxAttempts } from "./settings.js";
+import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
 
 const PROVIDER_ID = "claude-code";
 const LANE = "messages"; // Claude subscription limits are account-wide (index.ts:24)
@@ -69,7 +69,15 @@ export async function handleViaJavaOrchestrator(request, ctx) {
     ctxModel: (ctx && ctx.model) || "",
     topAutoCandidate: getAutoCandidates(PROVIDER_ID)[0] || "",
   });
-  const configJson = JSON.stringify({ maxAttempts: getMaxAttempts(), lane: LANE });
+  // Cooldown pair drives the Java orchestrator's no-reset-header exponential backoff, byte-matching
+  // request.ts:89-91's parseResetMs fallback (which the TS path applies but T6a's Java parseResetMs
+  // dropped). Read per-request like maxAttempts so a config edit applies without a restart.
+  const configJson = JSON.stringify({
+    maxAttempts: getMaxAttempts(),
+    defaultCooldownSeconds: getDefaultCooldownSeconds(),
+    maxCooldownSeconds: getMaxCooldownSeconds(),
+    lane: LANE,
+  });
 
   // --- per-request host state (isolated to this call) ---------------------------------------
   const responses = [];                 // retained live Response objects, indexed by attemptRef

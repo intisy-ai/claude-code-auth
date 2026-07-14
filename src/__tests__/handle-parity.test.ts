@@ -29,6 +29,7 @@ const H = vi.hoisted(() => {
     proxyScript: {},
     autoCandidates: [],
     calls: [],
+    outbound: [],
     now: 1_700_000_000_000,
   };
 
@@ -122,6 +123,26 @@ function resetForRun(sc: any) {
   harness.proxyScript = { ...(sc.proxy || {}) };
   harness.autoCandidates = sc.autoCandidates || [];
   harness.calls = [];
+  harness.outbound = [];
+}
+
+// FIX 2 (IMPORTANT-2): capture the OUTBOUND request each path actually hands to `fetch` so the
+// harness can assert Java `prepareClaudeRequest` and TS `prepareClaudeRequest` produce byte-identical
+// wire requests end-to-end (url/method/headers/body + the host-set proxy) — not just in T6a's
+// isolated unit tests. Header keys are sorted (order is not wire-significant) but case is preserved
+// so a genuine casing divergence would still surface.
+function captureOutbound(url: any, init: any) {
+  init = init || {};
+  const rawHeaders = init.headers || {};
+  const headers: Record<string, string> = {};
+  for (const k of Object.keys(rawHeaders).sort()) headers[k] = String(rawHeaders[k]);
+  return {
+    url: String(url),
+    method: init.method ?? null,
+    headers,
+    body: init.body ?? null,
+    proxy: init.proxy ?? null,
+  };
 }
 
 // Normalize the ONE documented divergence: the transport-failure reportError message.
@@ -158,13 +179,15 @@ async function runBothPaths(sc: any) {
   const tsResp = await driver.handle(makeReq(), ctx);
   const tsSnap = await snapshotResponse(tsResp);
   const tsCalls = normalizeCalls(harness.calls.slice());
+  const tsOutbound = harness.outbound.slice();
 
   resetForRun(sc);
   const jvResp = await handleViaJavaOrchestrator(makeReq(), ctx);
   const jvSnap = await snapshotResponse(jvResp);
   const jvCalls = normalizeCalls(harness.calls.slice());
+  const jvOutbound = harness.outbound.slice();
 
-  return { tsSnap, jvSnap, tsCalls, jvCalls };
+  return { tsSnap, jvSnap, tsCalls, jvCalls, tsOutbound, jvOutbound };
 }
 
 // --- fixtures ---------------------------------------------------------------
@@ -175,19 +198,36 @@ const POOL_HEADERS = {
 };
 const RESET_HEADERS = { "anthropic-ratelimit-unified-reset": "1700000100" };
 
+// The two paths read DIFFERENT clock primitives: the TS path calls Date.now(), while the TeaVM
+// orchestrator's System.currentTimeMillis compiles to `new Date().getTime()` (NOT Date.now()).
+// Freeze BOTH by swapping in a Date subclass whose no-arg construction and static now() are pinned
+// to harness.now, while `new Date(arg)` still delegates to the real Date (so response/date parsing
+// is unaffected). This makes the now-dependent reset times (retry-after + the no-reset-header
+// exponential backoff) deterministic AND identical across paths. Captured once from the true global.
+const RealDate = globalThis.Date;
+class FrozenDate extends RealDate {
+  constructor(...args: any[]) {
+    if (args.length === 0) super(harness.now);
+    else super(...(args as [any]));
+  }
+  static now() { return harness.now; }
+}
+
 let realFetch: any;
 beforeEach(() => {
   delete process.env.HUB_CLAUDE_JAVA_HANDLE;
-  vi.spyOn(Date, "now").mockReturnValue(harness.now);
+  globalThis.Date = FrozenDate as any;
   realFetch = globalThis.fetch;
   // Scripted fetch — consumes harness.fetchScript by call order; NO real network is ever touched.
-  globalThis.fetch = (async () => {
+  // Every call's outbound (url, init) is recorded first for the FIX-2 wire-parity assertion.
+  globalThis.fetch = (async (url: any, init: any) => {
+    harness.outbound.push(captureOutbound(url, init));
     const thunk = harness.fetchScript[harness.fetchIdx++];
     if (!thunk) throw new Error("parity harness: fetch script exhausted");
     return thunk();
   }) as any;
 });
-afterAll(() => { globalThis.fetch = realFetch; vi.restoreAllMocks(); });
+afterAll(() => { globalThis.fetch = realFetch; globalThis.Date = RealDate; vi.restoreAllMocks(); });
 
 // --- scenarios --------------------------------------------------------------
 
@@ -220,6 +260,31 @@ const scenarios: any[] = [
     acquire: [{ id: "acc1", access: "tok1" }, { id: "acc2", access: "tok2" }],
     proxy: { acc1: "http://proxy1" },
     fetch: [resp(429, RESET_HEADERS, "rate limited"), resp(200, jsonHeaders, '{"ok":true}')],
+  },
+  {
+    // FIX 1 (IMPORTANT-1): a 429 with NO reset header. The TS path falls through parseResetMs to
+    // the exponential-backoff fallback (request.ts:89-91): reportRateLimit(now + 60_000*2^attempt).
+    // Before the fix the Java path passed null here → this scenario FAILS; after the fix both call
+    // reportRateLimit with the SAME numeric reset (deterministic via the frozen clock).
+    name: "429 with NO reset header then ok — exponential-backoff reset parity",
+    accounts: [{ id: "acc1", enabled: true }, { id: "acc2", enabled: true }],
+    acquire: [{ id: "acc1", access: "tok1" }, { id: "acc2", access: "tok2" }],
+    fetch: [resp(429, jsonHeaders, "rate limited"), resp(200, jsonHeaders, '{"ok":true}')],
+  },
+  {
+    // Same, for a 529 (Anthropic "overloaded") — also rate-limit-classified, also header-less here.
+    name: "529 with NO reset header then ok — exponential-backoff reset parity",
+    accounts: [{ id: "acc1", enabled: true }, { id: "acc2", enabled: true }],
+    acquire: [{ id: "acc1", access: "tok1" }, { id: "acc2", access: "tok2" }],
+    fetch: [resp(529, jsonHeaders, "overloaded"), resp(200, jsonHeaders, '{"ok":true}')],
+  },
+  {
+    // Two header-less 429s in a row → proves the backoff DOUBLES per attempt across both paths
+    // (attempt 0: now+60_000, attempt 1: now+120_000), still identical TS↔Java.
+    name: "two 429s with NO reset header then ok — doubling backoff parity",
+    accounts: [{ id: "acc1", enabled: true }, { id: "acc2", enabled: true }, { id: "acc3", enabled: true }],
+    acquire: [{ id: "acc1", access: "tok1" }, { id: "acc2", access: "tok2" }, { id: "acc3", access: "tok3" }],
+    fetch: [resp(429, jsonHeaders, "rate limited"), resp(429, jsonHeaders, "rate limited"), resp(200, jsonHeaders, '{"ok":true}')],
   },
   {
     name: "401 rotate then ok",
@@ -279,9 +344,11 @@ const scenarios: any[] = [
 describe("handle parity: TS path vs Java-orchestrator delegation", () => {
   for (const sc of scenarios) {
     it(sc.name, async () => {
-      const { tsSnap, jvSnap, tsCalls, jvCalls } = await runBothPaths(sc);
+      const { tsSnap, jvSnap, tsCalls, jvCalls, tsOutbound, jvOutbound } = await runBothPaths(sc);
       expect(jvSnap, "final Response must be identical").toEqual(tsSnap);
       expect(jvCalls, "ordered manager/proxy call sequence must be identical").toEqual(tsCalls);
+      // FIX 2: the actual wire requests (url/method/headers/body/proxy), in order, must match too.
+      expect(jvOutbound, "outbound fetch requests must be byte-identical").toEqual(tsOutbound);
     });
   }
 });

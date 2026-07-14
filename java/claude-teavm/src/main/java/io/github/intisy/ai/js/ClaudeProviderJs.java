@@ -171,7 +171,9 @@ public final class ClaudeProviderJs {
      * {@code jl_String} instead of a real JS string (see {@code JsHttpClientBridge.JsHttpSend}).
      *
      * @param inputsJson {@code {url, method, headers:{}, bodyText, ctxModel?, topAutoCandidate?}}
-     * @param configJson {@code {maxAttempts}} (the lane is the fixed {@code "messages"} constant)
+     * @param configJson {@code {maxAttempts, defaultCooldownSeconds?, maxCooldownSeconds?}} (the
+     *                   lane is the fixed {@code "messages"} constant; the cooldown pair drives the
+     *                   no-reset-header exponential backoff, defaulting to settings.ts's 60/900)
      * @param jsExec     async attempt transport ({@code fetch}+IP-proxy in prod)
      * @param jsAcquire  async {@code manager.acquire(lane)}
      * @param jsReports  the grouped synchronous account-reporting callbacks
@@ -239,8 +241,15 @@ public final class ClaudeProviderJs {
         cfg.maxAttempts = 1;
         Object parsed = configJson != null ? json.parse(configJson) : null;
         if (parsed instanceof Map) {
-            Object maxAttempts = ((Map<?, ?>) parsed).get("maxAttempts");
+            Map<?, ?> m = (Map<?, ?>) parsed;
+            Object maxAttempts = m.get("maxAttempts");
             if (maxAttempts instanceof Number) cfg.maxAttempts = ((Number) maxAttempts).intValue();
+            // Cooldown config for the no-reset-header exponential backoff (request.ts:89-91). Absent
+            // -> OrchestratorConfig's settings.ts-matching defaults (60/900) stand.
+            Object defaultCooldown = m.get("defaultCooldownSeconds");
+            if (defaultCooldown instanceof Number) cfg.defaultCooldownSeconds = ((Number) defaultCooldown).intValue();
+            Object maxCooldown = m.get("maxCooldownSeconds");
+            if (maxCooldown instanceof Number) cfg.maxCooldownSeconds = ((Number) maxCooldown).intValue();
         }
         return cfg;
     }
