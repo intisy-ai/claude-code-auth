@@ -11,6 +11,7 @@ const DEFAULT_SELECTION = "hybrid";
 const SELECTION_STRATEGIES = ["sticky", "round-robin", "hybrid"];
 const DEFAULT_COOLDOWN_SECONDS = 60;
 const MAX_COOLDOWN_SECONDS = 900;
+const DEFAULT_USE_JAVA_ORCHESTRATOR = false;
 
 export function getSetting(key, fallback) {
   const value = getConfigValue(PACKAGE_NAME, key);
@@ -43,4 +44,13 @@ export function getDefaultCooldownSeconds(): number {
 export function getMaxCooldownSeconds(): number {
   const value = Number(getSetting("max_cooldown_seconds", MAX_COOLDOWN_SECONDS));
   return Number.isFinite(value) && value >= 1 ? Math.floor(value) : MAX_COOLDOWN_SECONDS;
+}
+
+// DORMANT delegation flag (T6c2): when true, `handle` delegates to the TeaVM-compiled
+// Java orchestrator instead of the pure-TS path. Default OFF — landing the delegation must
+// NOT change live `cc`. The env var HUB_CLAUDE_JAVA_HANDLE=1 forces it on for agentbox
+// testing without editing config; otherwise the persisted setting decides. The flip is T6d.
+export function useJavaOrchestrator(): boolean {
+  if (process.env.HUB_CLAUDE_JAVA_HANDLE === "1") return true;
+  return getSetting("use_java_orchestrator", DEFAULT_USE_JAVA_ORCHESTRATOR) === true;
 }

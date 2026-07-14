@@ -18,6 +18,7 @@ import {
   getMaxCooldownSeconds,
   getSetting,
   setSetting,
+  useJavaOrchestrator,
 } from "./settings.js";
 
 const PROVIDER_ID = "claude-code";
@@ -27,6 +28,10 @@ const manager = new AccountManager(PROVIDER_ID, {
   selection: getSelection(),
   oauth: oauthConfig(),
 });
+
+// Exported so the flag-gated Java-orchestrator delegation shell (javaHandle.ts) and the parity
+// harness share this ONE AccountManager instance (state consistency). Additive; no runtime effect.
+export { manager };
 
 function isRateLimitStatus(status) {
   return status === 429 || status === 529;
@@ -70,6 +75,14 @@ function applyAssignedModel(bodyText, ctx, log) {
 }
 
 async function handle(request, ctx) {
+  // DORMANT delegation gate (T6c2): default OFF. When ON, run the decision loop through the
+  // TeaVM-compiled Java orchestrator instead. The module — and the TeaVM ESM it pulls in — is
+  // imported ONLY here and ONLY when ON, so a flag-OFF `cc` never loads or executes any of it.
+  if (useJavaOrchestrator()) {
+    const { handleViaJavaOrchestrator } = await import("./javaHandle.js");
+    return handleViaJavaOrchestrator(request, ctx);
+  }
+
   const log = (ctx && ctx.log) || (() => {});
 
   const url = request.url;
@@ -247,6 +260,17 @@ export const driver = {
         ],
       },
       {
+        title: "Experimental",
+        fields: [
+          {
+            key: "use_java_orchestrator",
+            label: "Use Java orchestrator (experimental)",
+            type: "boolean",
+            hint: "Route requests through the TeaVM-compiled Java handle orchestrator instead of the TS path. Default off; env HUB_CLAUDE_JAVA_HANDLE=1 also forces it on.",
+          },
+        ],
+      },
+      {
         title: "Rate limits",
         fields: [
           {
@@ -273,6 +297,7 @@ export const driver = {
       if (key === "account_selection_strategy") return getSelection();
       if (key === "default_cooldown_seconds") return getDefaultCooldownSeconds();
       if (key === "max_cooldown_seconds") return getMaxCooldownSeconds();
+      if (key === "use_java_orchestrator") return getSetting("use_java_orchestrator", false) === true;
       return getSetting(key, undefined);
     },
     set: (key, value) => setSetting(key, value),

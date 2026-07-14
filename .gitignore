@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# TeaVM-compiled orchestrator ESM staged by core/teavm-build.mjs at build time — never committed.
+src/generated/
 .DS_Store
 .env
 npm-debug.log*
