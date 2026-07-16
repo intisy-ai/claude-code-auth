@@ -45,6 +45,14 @@ public final class ClaudeProvider implements Provider {
 
     @Override
     public HttpResponse handle(HttpRequest request, HandlerCtx ctx) {
+        // Model-map Task 1: dashboard discovery calls GET .../v1/models -- a side path that never
+        // touches the messages orchestrator below (no retry/rotation, just one ensureAccess'd
+        // upstream fetch). Checked first so the messages path stays completely untouched.
+        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/models")) {
+            return ClaudeModelsFetch.fetch(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), ctx);
+        }
+
         ClaudeBackend backend = ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null);
         Logger log = loggerFor(ctx);
         ClaudeHandleOrchestrator orchestrator = orchestratorFor(backend);
@@ -122,7 +130,9 @@ public final class ClaudeProvider implements Provider {
         return log != null ? log : (msg -> { });
     }
 
-    private static HttpResponse errorResponse(int status, String errorType, String message) {
+    // Package-private (not private) so ClaudeModelsFetch's own error paths can build the exact
+    // same {"type":"error","error":{...}} shape instead of duplicating the JSON construction.
+    static HttpResponse errorResponse(int status, String errorType, String message) {
         HttpResponse response = new HttpResponse();
         response.status = status;
         response.headers = new LinkedHashMap<>();
