@@ -53,6 +53,14 @@ public final class ClaudeProvider implements Provider {
             return ClaudeModelsFetch.fetch(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), ctx);
         }
 
+        // Quota-display Task 1: dashboard usage-display calls GET .../v1/quota -- same side-path
+        // discipline as the /v1/models branch above (no retry/rotation, per-account ensureAccess'd
+        // upstream fetches). Checked before the messages path so it stays completely untouched.
+        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/quota")) {
+            return ClaudeUsageFetch.fetch(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), ctx);
+        }
+
         ClaudeBackend backend = ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null);
         Logger log = loggerFor(ctx);
         ClaudeHandleOrchestrator orchestrator = orchestratorFor(backend);
