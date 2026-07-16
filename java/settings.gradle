@@ -27,3 +27,21 @@ include ":claude-provider"
 // :claude-teavm - trivial TeaVM JS export surface proving both T6a classes are
 // TeaVM-transpilable (generateJavaScript). Reuses :teavm's js-base instead of duplicating it.
 include ":claude-teavm"
+
+// ---- test-only composite build -------------------------------------------------------------
+// Pulls ai-java's own Gradle build in (Phase 6 of the JVM claude provider plan) so
+// :claude-provider can `compileOnly`/`testImplementation "io.github.intisy:jvm:0.1.0"` --
+// AccountManager/AccountStore/OAuthConfig (:accounts) and the JVM backends (FileStore/
+// UrlConnectionHttpClient/GsonJsonCodec/SystemClock/SecureRandomAdapter) that Phase 6's
+// self-assembled ClaudeBackend depends on. Mirrors antigravity-auth's identical recipe exactly
+// (antigravity-auth/java/settings.gradle) -- LOCAL DEV-ONLY: only resolves when ai-java is
+// checked out side by side on the same machine. Override with -PaiJavaDir=<path> if your
+// checkout isn't at the default (the unified ai/ tree's java/ai-java).
+def aiJavaDir = file(providers.gradleProperty("aiJavaDir").getOrElse("F:/Documents/GitHub/ai/java/ai-java"))
+if (aiJavaDir.isDirectory()) {
+    includeBuild(aiJavaDir)
+} else {
+    logger.warn("claude-code-auth java: ai-java not found at ${aiJavaDir} -- the includeBuild-based " +
+            "io.github.intisy:jvm dependency (ClaudeBackend's self-assembled backend) will fail to " +
+            "resolve. Pass -PaiJavaDir=<path-to-ai-java> to point at a different checkout.")
+}

@@ -2,12 +2,22 @@
 // TS (../src, ../package.json), mirroring stub-auth's java/build.gradle (same pattern core-proxy's
 // own java/build.gradle uses). Deliberately does NOT reuse ai-java's root build.gradle (its
 // io.github.intisy.online-gradle/github-gradle plugins are ai-java-repo-specific publishing
-// concerns, out of scope for a provider module) -- just plain java-library + JUnit.
+// concerns, out of scope for a provider module) -- but DOES apply the same github-gradle publishing
+// recipe antigravity-auth's own java/build.gradle uses (Phase 6 of the JVM claude provider plan),
+// scoped to :claude-provider only (the one publishable artifact in this multi-module build).
+plugins {
+    id "io.github.intisy.github-gradle" version "1.8.2.1" apply false
+}
+
 subprojects {
     apply plugin: "java-library"
+    apply plugin: "io.github.intisy.github-gradle"
 
     group = "io.github.intisy"
-    version = "0.1.0"
+    // publishGithub requires a concrete version. Derive it from -Partifact_version=<tag> passed by
+    // CI (stripping a leading "v"), falling back to a local dev version -- same derivation
+    // antigravity-auth's/stub-auth's own root build.gradle uses.
+    version = (project.findProperty("artifact_version") ?: "0.0.0-dev").toString().replaceFirst(/^v/, "")
 
     repositories {
         mavenLocal()
@@ -40,5 +50,16 @@ subprojects {
 
     test {
         useJUnitPlatform()
+    }
+
+    github {
+        accessToken = System.getenv("GITHUB_TOKEN") ?: ""
+    }
+
+    // Only :claude-provider is a published artifact (:routing/:teavm are aliased from core-proxy,
+    // :claude-teavm is a TeaVM js-export module) -- scope publishGithub so an aggregate `publish`
+    // doesn't fail on the non-library modules.
+    tasks.matching { it.name == "publishGithub" }.configureEach {
+        onlyIf { project.path == ":claude-provider" }
     }
 }

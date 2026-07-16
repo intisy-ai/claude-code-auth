@@ -1,9 +1,45 @@
 dependencies {
-    // Only the JsonCodec SPI is needed (io.github.intisy.ai.shared.spi.JsonCodec) -- T6a's two
-    // classes do NOT implement the host-provided Provider/ProxyHandler SPI (that's Bucket B,
-    // out of scope), so there is no "keep the shipped jar thin" concern stub-provider had.
-    // compileOnly still keeps this module's own build artifact from bundling :routing's classes;
-    // testImplementation re-adds it so test code can construct a JsonCodec-typed reference too.
+    // Only the JsonCodec SPI is needed by T6a's two classes (io.github.intisy.ai.shared.spi.
+    // JsonCodec); ClaudeProvider/ClaudeBackend/ClaudeHostSeams (Phase 6) additionally implement
+    // the host-provided Provider/ProxyHandler SPI and a real AccountManager -- same "keep the
+    // shipped jar thin" discipline stub-provider/antigravity-provider use: compileOnly keeps
+    // :routing's classes out of this module's own built jar (the host's ProviderRegistry
+    // classloader already has them); testImplementation re-adds it so test code can construct
+    // SPI-typed references too.
     compileOnly project(":routing")
     testImplementation project(":routing")
+
+    // Phase 6: ClaudeBackend self-assembles Store/HttpClient/JsonCodec/Clock/Random + a real
+    // AccountManager from the JVM backends + :accounts (io.github.intisy:jvm's `api` dependencies
+    // come along transitively -- no separate :accounts coordinate needed). compileOnly (not
+    // implementation) keeps this module's own jar THIN: the host's ProviderRegistry classloader
+    // already has :jvm on its classpath. Resolved via the test-only composite build in
+    // settings.gradle (includeBuild(aiJavaDir)) substituting this group:module coordinate for the
+    // real :jvm project.
+    compileOnly "io.github.intisy:jvm:0.1.0"
+    testImplementation "io.github.intisy:jvm:0.1.0"
+}
+
+// Keep the jar filename version-less (claude-provider.jar) even though project.version is now set
+// (for publishGithub's package version) -- publishGithub's artifacts block below references
+// build/libs/claude-provider.jar by that exact name.
+jar {
+    archiveVersion = ""
+}
+
+publishGithub {
+    // :claude-provider is a subdirectory of claude-code-auth's own repo with no .git of its own
+    // inside java/claude-provider, so publishGithub's default git-remote lookup fails. Set
+    // owner/repo explicitly -- these also drive the uploaded asset name (claude-code-auth-provider
+    // .jar, from `repo` + classifier). NOTE: Phase 6 only sets up this scaffold -- no tag is cut
+    // and no release is published as part of this task.
+    owner = "intisy-ai"
+    repo = "claude-code-auth"
+    releaseName = "Claude provider ${project.findProperty('artifact_version') ?: project.version}"
+    artifacts {
+        artifact {
+            classifier = "provider"
+            jar = file("build/libs/claude-provider.jar")
+        }
+    }
 }
