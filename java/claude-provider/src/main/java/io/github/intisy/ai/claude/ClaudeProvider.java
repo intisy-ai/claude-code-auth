@@ -1,5 +1,6 @@
 package io.github.intisy.ai.claude;
 
+import io.github.intisy.ai.shared.model.Account;
 import io.github.intisy.ai.shared.routing.HandlerCtx;
 import io.github.intisy.ai.shared.routing.Provider;
 import io.github.intisy.ai.shared.spi.Logger;
@@ -63,7 +64,7 @@ public final class ClaudeProvider implements Provider {
         ClaudeHandleOrchestrator.OrchestratorConfig cfg = new ClaudeHandleOrchestrator.OrchestratorConfig();
         // Rotate through every enabled account once per request (phase-6 decision: maxAttempts =
         // max(1, enabled account count)); cooldowns stay at the field defaults (60/900).
-        cfg.maxAttempts = Math.max(1, backend.accountStore.list(ClaudeBackend.PROVIDER_ID).size());
+        cfg.maxAttempts = Math.max(1, countEnabledAccounts(backend));
 
         ClaudeHandleOrchestrator.AttemptExecutor exec = new ClaudeHostSeams.HostAttemptExecutor(backend);
         ClaudeHandleOrchestrator.AccountOps accounts = new ClaudeHostSeams.HostAccountOps(backend);
@@ -77,6 +78,19 @@ public final class ClaudeProvider implements Provider {
 
     private static ClaudeHandleOrchestrator orchestratorFor(ClaudeBackend backend) {
         return ORCHESTRATORS.computeIfAbsent(backend, b -> new ClaudeHandleOrchestrator(b.json, b.clock));
+    }
+
+    // Mirrors ClaudeHostSeams.HostAccountOps#listEnabledCount(): maxAttempts must rotate through
+    // ENABLED accounts only, not every stored account (a disabled one would burn an attempt for
+    // nothing).
+    private static int countEnabledAccounts(ClaudeBackend backend) {
+        int count = 0;
+        for (Account a : backend.accountStore.list(ClaudeBackend.PROVIDER_ID)) {
+            if (a.enabled != Boolean.FALSE) {
+                count++;
+            }
+        }
+        return count;
     }
 
     // ---- HandleDecision materialization -- only TWO kinds ------------------------------------

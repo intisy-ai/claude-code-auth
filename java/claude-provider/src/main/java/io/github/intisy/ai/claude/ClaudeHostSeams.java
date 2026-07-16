@@ -5,6 +5,8 @@ import io.github.intisy.ai.shared.model.Account;
 import io.github.intisy.ai.shared.spi.http.HttpRequest;
 import io.github.intisy.ai.shared.spi.http.HttpResponse;
 
+import java.util.Map;
+
 /**
  * JVM host implementations of the two seams {@link ClaudeHandleOrchestrator} needs (Phase 6, see
  * {@code .superpowers/sdd/phase-6-brief.md}): adapts {@link ClaudeBackend}'s core-auth {@code
@@ -86,7 +88,7 @@ final class ClaudeHostSeams {
         }
 
         @Override
-        public void captureQuota(String accountId, java.util.Map<String, String> headers) {
+        public void captureQuota(String accountId, Map<String, String> headers) {
             // MVP no-op: quota capture/display is the later provider-management-UI sub-project.
             // The serve + rate-limit path does not need it (see phase-6 brief, decisions section).
         }

@@ -43,7 +43,9 @@ class ClaudeProviderTest {
         ClaudeBackend backend = registerTestBackend(configDir, http);
         backend.accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
 
-        HttpResponse response = handle(configDir);
+        // Inbound request carries an x-api-key -- prepareClaudeRequest must strip it before the
+        // outbound call, since Claude auth rides the Bearer/OAuth headers instead.
+        HttpResponse response = handle(configDir, "x-api-key", "sk-should-be-stripped");
 
         assertEquals(200, response.status);
         assertEquals("{\"id\":\"msg_1\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}", response.body);
@@ -54,7 +56,7 @@ class ClaudeProviderTest {
         assertEquals("Bearer access-acct-a", sent.headers.get("authorization"));
         assertEquals("2023-06-01", sent.headers.get("anthropic-version"));
         assertTrue(sent.headers.get("anthropic-beta").contains("oauth-2025-04-20"));
-        assertNull(sent.headers.get("x-api-key"));
+        assertNull(sent.headers.get("x-api-key"), "the inbound x-api-key must be stripped, not forwarded upstream");
     }
 
     @Test
@@ -74,8 +76,13 @@ class ClaudeProviderTest {
         String firstAuth = http.requests.get(0).headers.get("authorization");
         String secondAuth = http.requests.get(1).headers.get("authorization");
         assertNotEquals(firstAuth, secondAuth, "the rotation must have used a different account's token");
-        assertTrue(hasRateLimitEntry(backend, "acct-a") || hasRateLimitEntry(backend, "acct-b"),
-                "reportRateLimit must have been recorded for the first (429'd) account");
+
+        // Identify the account that actually received the 429 (the one whose Bearer token matches
+        // the FIRST outbound request -- seededAccount sets access = "access-" + id), then assert
+        // the rate limit was recorded for THAT account specifically, not just "some" account.
+        String firstAccountId = firstAuth.substring("Bearer access-".length());
+        assertTrue(hasRateLimitEntry(backend, firstAccountId),
+                "reportRateLimit must have been recorded for " + firstAccountId + ", the account that received the 429");
     }
 
     @Test
@@ -136,10 +143,21 @@ class ClaudeProviderTest {
     }
 
     private static HttpResponse handle(Path configDir) {
+        return handle(configDir, (String[]) null);
+    }
+
+    /** {@code headerKv} is optional alternating key/value pairs set as the inbound request's headers. */
+    private static HttpResponse handle(Path configDir, String... headerKv) {
         HttpRequest request = new HttpRequest();
         request.method = "POST";
         request.url = "/v1/messages";
         request.body = "{\"model\":\"claude-code-sonnet\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}";
+        if (headerKv != null) {
+            request.headers = new LinkedHashMap<>();
+            for (int i = 0; i < headerKv.length; i += 2) {
+                request.headers.put(headerKv[i], headerKv[i + 1]);
+            }
+        }
 
         HandlerCtx ctx = new HandlerCtx();
         ctx.configDir = configDir.toString();
