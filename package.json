@@ -1,6 +1,6 @@
 {
   "name": "claude-code-auth",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Claude Code subscription auth provider for OpenCode and Claude Code — multiple Claude accounts via OAuth, with subscription rate limits exposed to OpenCode.",
   "main": "dist/index.js",
   "type": "module",
