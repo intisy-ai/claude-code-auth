@@ -1,0 +1,45 @@
+name: Sync Experimental to Main
+
+# Mirrors ai-java's sync-experimental-to-main: every push to the working branch (experimental) is
+# auto-merged into main (the release branch — tags are cut from these commits). Uses the built-in
+# GITHUB_TOKEN (this repo has no PAT secret); the merge push needs no downstream trigger. README.md
+# conflicts auto-resolve to main's copy (the TS plugin regenerates its README on build), so
+# experimental's copy is never authoritative.
+on:
+  push:
+    branches:
+      - experimental
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch and Checkout Main
+        run: |
+          git fetch origin
+          git checkout main
+
+      - name: Merge Experimental into Main
+        run: |
+          if ! git merge --no-ff origin/experimental -m "Automated merge from experimental to main"; then
+            echo "Merge conflict detected, auto-resolving README.md to main's copy..."
+            git checkout main -- README.md 2>/dev/null || git rm README.md 2>/dev/null || true
+            git add -A
+            git commit --no-edit
+          fi
+
+      - name: Push Changes
+        run: git push origin main
