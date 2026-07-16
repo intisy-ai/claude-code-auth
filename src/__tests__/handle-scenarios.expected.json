@@ -1,0 +1,1138 @@
+[
+  {
+    "name": "happy path — 200 on attempt 0 (captureQuota mutate + reportSuccess + SERVE)",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "anthropic-ratelimit-unified-5h-status": "allowed",
+        "anthropic-ratelimit-unified-5h-utilization": "0.5",
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.mutate",
+        "acc1",
+        {
+          "id": "acc1",
+          "enabled": true,
+          "cachedQuota": {
+            "pools": {
+              "5h": {
+                "status": "allowed",
+                "utilization": 0.5
+              }
+            },
+            "at": 1700000000000
+          }
+        }
+      ],
+      [
+        "manager.reportSuccess",
+        "acc1"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "happy path via proxy — reportResult(true) then SERVE",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        "http://proxy1"
+      ],
+      [
+        "proxy.reportResult",
+        "http://proxy1",
+        true
+      ],
+      [
+        "manager.reportSuccess",
+        "acc1"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": "http://proxy1"
+      }
+    ]
+  },
+  {
+    "name": "429-then-ok via proxy — rotate + proxy reportRateLimit ipSuspected:true (has quota)",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        "http://proxy1"
+      ],
+      [
+        "proxy.reportResult",
+        "http://proxy1",
+        true
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc1",
+        "messages",
+        1700000100000
+      ],
+      [
+        "proxy.reportRateLimit",
+        "http://proxy1",
+        {
+          "ipSuspected": true
+        }
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc2"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": "http://proxy1"
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "429-then-ok via proxy — proxy reportRateLimit ipSuspected:false (no quota)",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        "http://proxy1"
+      ],
+      [
+        "proxy.reportResult",
+        "http://proxy1",
+        true
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc1",
+        "messages",
+        1700000100000
+      ],
+      [
+        "proxy.reportRateLimit",
+        "http://proxy1",
+        {
+          "ipSuspected": false
+        }
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc2"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": "http://proxy1"
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "429 with NO reset header then ok — exponential-backoff reset parity",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc1",
+        "messages",
+        1700000060000
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc2"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "529 with NO reset header then ok — exponential-backoff reset parity",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc1",
+        "messages",
+        1700000060000
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc2"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "two 429s with NO reset header then ok — doubling backoff parity",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc1",
+        "messages",
+        1700000060000
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc2",
+        "messages",
+        1700000120000
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc3"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc3",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc3"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok3",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "401 rotate then ok",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportError",
+        "acc1",
+        0,
+        "401 unauthorized"
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc2"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "403 disable then ok",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.mutate",
+        "acc1",
+        {
+          "id": "acc1",
+          "enabled": false,
+          "disabledReason": "re-login required (token lacks inference scope)"
+        }
+      ],
+      [
+        "manager.reportError",
+        "acc1",
+        0,
+        "403 scope"
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc2"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "transport failure (no proxy) then ok — reportError message is the documented divergence",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportError",
+        "acc1",
+        0,
+        "<transport-failed>"
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc2"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "transport failure via proxy → direct-retry succeeds — reportResult(false) then SERVE",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        "http://proxy1"
+      ],
+      [
+        "proxy.reportResult",
+        "http://proxy1",
+        false
+      ],
+      [
+        "manager.reportSuccess",
+        "acc1"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": "http://proxy1"
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "missing access token → reportError then rotate to ok",
+    "snap": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ok\":true}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "manager.reportError",
+        "acc1",
+        0,
+        "missing access token"
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportSuccess",
+        "acc2"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "no enabled account → terminal chatError 400",
+    "snap": {
+      "status": 400,
+      "headers": {
+        "content-type": "application/json",
+        "x-hub-chat-error": "1"
+      },
+      "body": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"No Claude account available — all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.\"}}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        null
+      ]
+    ],
+    "outbound": []
+  },
+  {
+    "name": "accounts only cooling down → retryable 503",
+    "snap": {
+      "status": 503,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":{\"message\":\"No Claude account free right now (all rate-limited). Try again shortly.\"}}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        null
+      ]
+    ],
+    "outbound": []
+  },
+  {
+    "name": "exhaustion — all 429, SERVE the last real upstream 429",
+    "snap": {
+      "status": 429,
+      "headers": {
+        "anthropic-ratelimit-unified-reset": "1700000100",
+        "content-type": "text/plain;charset=UTF-8"
+      },
+      "body": "rate limited"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc0"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc0",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc0",
+        "messages",
+        1700000100000
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc1",
+        "messages",
+        1700000100000
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc2",
+        "messages",
+        1700000100000
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc3"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc3",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportRateLimit",
+        "acc3",
+        "messages",
+        1700000100000
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok0",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok3",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  },
+  {
+    "name": "exhaustion — all transport-fail, synthetic 502",
+    "snap": {
+      "status": 502,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":{\"message\":\"Claude request failed after 4 attempts\"}}"
+    },
+    "calls": [
+      [
+        "manager.acquire",
+        "messages",
+        "acc0"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc0",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportError",
+        "acc0",
+        0,
+        "<transport-failed>"
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc1"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc1",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportError",
+        "acc1",
+        1,
+        "<transport-failed>"
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc2"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc2",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportError",
+        "acc2",
+        2,
+        "<transport-failed>"
+      ],
+      [
+        "manager.acquire",
+        "messages",
+        "acc3"
+      ],
+      [
+        "proxy.selectForAccount",
+        "acc3",
+        "claude-code",
+        null
+      ],
+      [
+        "manager.reportError",
+        "acc3",
+        3,
+        "<transport-failed>"
+      ]
+    ],
+    "outbound": [
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok0",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok1",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok2",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      },
+      {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "anthropic-beta": "oauth-2025-04-20",
+          "anthropic-version": "2023-06-01",
+          "authorization": "Bearer tok3",
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "proxy": null
+      }
+    ]
+  }
+]

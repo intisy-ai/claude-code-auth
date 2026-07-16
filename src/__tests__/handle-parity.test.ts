@@ -1,21 +1,6 @@
 // @ts-nocheck
-// T6c2 PARITY HARNESS — runs BOTH the live pure-TS `handle` (driver.handle, flag OFF) and the
-// Java-orchestrator delegation (handleViaJavaOrchestrator) against the SAME scripted scenarios,
-// asserting IDENTICAL outcomes (final Response status + headers + body) AND the IDENTICAL ordered
-// sequence of manager.* / proxyManager.* calls (incl. the reportRateLimit ipSuspected proxy
-// re-fire). This offline diff is the evidence that flipping the flag in T6d is safe.
-//
-// Fakes: core-auth's AccountManager + proxyManager + getAutoCandidates are replaced (so both paths
-// share ONE instrumented manager/proxy); the real chatError / accountControllerFromManager /
-// defineProvider stay; captureQuota / accountHasQuota (accounts-controller) stay real; global fetch
-// is scripted per scenario. Date.now is frozen so proxy-latency / captureQuota `at` are deterministic.
-//
-// KNOWN, INTENTIONAL DIVERGENCE (documented, NOT a defect): on a transport failure the TS path
-// reports the real JS Error text to manager.reportError, while the Java path reports the generic
-// "transport failed" token — because the live Error object never crosses into Java by design
-// (ClaudeHandleOrchestrator javadoc L247-253; T6b). The ROTATION effect (a reportError for that
-// account+attempt) is identical; only the free-text message differs, so the harness normalizes just
-// that one field (see normalizeCalls) and this comment records the raw values.
+// Java-orchestrator regression: runs handleViaJavaOrchestrator against the SAME scripted scenarios
+// that once proved TS≡Java, asserting output against a frozen fixture captured from that baseline.
 
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 
@@ -98,6 +83,7 @@ vi.mock("../../core-auth/dist/index.js", async (importOriginal) => {
 import { driver, manager } from "../driver/index.js";
 import { handleViaJavaOrchestrator } from "../driver/javaHandle.js";
 import { getMaxAttempts } from "../driver/settings.js";
+import expected from "./handle-scenarios.expected.json";
 
 const harness = H.harness;
 
@@ -166,28 +152,14 @@ async function snapshotResponse(r: Response) {
   };
 }
 
-async function runBothPaths(sc: any) {
-  const makeReq = () =>
-    new Request("https://loader.local/v1/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }),
-    });
-  const ctx = { model: "", log: () => {} };
-
+async function runJavaPath(sc: any) {
+  const makeReq = () => new Request("https://loader.local/v1/messages", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }),
+  });
   resetForRun(sc);
-  const tsResp = await driver.handle(makeReq(), ctx);
-  const tsSnap = await snapshotResponse(tsResp);
-  const tsCalls = normalizeCalls(harness.calls.slice());
-  const tsOutbound = harness.outbound.slice();
-
-  resetForRun(sc);
-  const jvResp = await handleViaJavaOrchestrator(makeReq(), ctx);
-  const jvSnap = await snapshotResponse(jvResp);
-  const jvCalls = normalizeCalls(harness.calls.slice());
-  const jvOutbound = harness.outbound.slice();
-
-  return { tsSnap, jvSnap, tsCalls, jvCalls, tsOutbound, jvOutbound };
+  const jvResp = await handleViaJavaOrchestrator(makeReq(), { model: "", log: () => {} });
+  return { snap: await snapshotResponse(jvResp), calls: normalizeCalls(harness.calls.slice()), outbound: harness.outbound.slice() };
 }
 
 // --- fixtures ---------------------------------------------------------------
@@ -215,7 +187,6 @@ class FrozenDate extends RealDate {
 
 let realFetch: any;
 beforeEach(() => {
-  delete process.env.HUB_CLAUDE_JAVA_HANDLE;
   globalThis.Date = FrozenDate as any;
   realFetch = globalThis.fetch;
   // Scripted fetch — consumes harness.fetchScript by call order; NO real network is ever touched.
@@ -341,39 +312,30 @@ const scenarios: any[] = [
   },
 ];
 
-describe("handle parity: TS path vs Java-orchestrator delegation", () => {
+describe("handle regression: Java orchestrator vs frozen fixture", () => {
   for (const sc of scenarios) {
     it(sc.name, async () => {
-      const { tsSnap, jvSnap, tsCalls, jvCalls, tsOutbound, jvOutbound } = await runBothPaths(sc);
-      expect(jvSnap, "final Response must be identical").toEqual(tsSnap);
-      expect(jvCalls, "ordered manager/proxy call sequence must be identical").toEqual(tsCalls);
-      // FIX 2: the actual wire requests (url/method/headers/body/proxy), in order, must match too.
-      expect(jvOutbound, "outbound fetch requests must be byte-identical").toEqual(tsOutbound);
+      const exp = expected.find((e: any) => e.name === sc.name);
+      expect(exp, `fixture missing for ${sc.name}`).toBeTruthy();
+      const got = await runJavaPath(sc);
+      expect(got.snap, "final Response").toEqual(exp.snap);
+      expect(got.calls, "ordered manager/proxy call sequence").toEqual(exp.calls);
+      expect(got.outbound, "outbound fetch requests").toEqual(exp.outbound);
     });
   }
 });
 
-describe("flag routing", () => {
-  it("HUB_CLAUDE_JAVA_HANDLE=1 makes driver.handle delegate identically to the direct Java path", async () => {
+describe("driver.handle delegates to the Java orchestrator", () => {
+  it("driver.handle == handleViaJavaOrchestrator for the happy path", async () => {
     const sc = scenarios[0];
-    // direct Java path
     resetForRun(sc);
-    const direct = await snapshotResponse(
-      await handleViaJavaOrchestrator(
-        new Request("https://loader.local/v1/messages", { method: "POST", headers: jsonHeaders, body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
-        { model: "", log: () => {} },
-      ),
-    );
-    // via driver.handle with the env flag ON
-    process.env.HUB_CLAUDE_JAVA_HANDLE = "1";
+    const direct = await snapshotResponse(await handleViaJavaOrchestrator(
+      new Request("https://loader.local/v1/messages", { method: "POST", headers: jsonHeaders, body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
+      { model: "", log: () => {} }));
     resetForRun(sc);
-    const viaFlag = await snapshotResponse(
-      await driver.handle(
-        new Request("https://loader.local/v1/messages", { method: "POST", headers: jsonHeaders, body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
-        { model: "", log: () => {} },
-      ),
-    );
-    delete process.env.HUB_CLAUDE_JAVA_HANDLE;
-    expect(viaFlag).toEqual(direct);
+    const viaDriver = await snapshotResponse(await driver.handle(
+      new Request("https://loader.local/v1/messages", { method: "POST", headers: jsonHeaders, body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
+      { model: "", log: () => {} }));
+    expect(viaDriver).toEqual(direct);
   });
 });

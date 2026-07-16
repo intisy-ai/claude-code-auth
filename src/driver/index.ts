@@ -5,7 +5,6 @@
 // system block) and rotation across subscription accounts.
 
 import { defineProvider, AccountManager, proxyManager, getAutoCandidates, chatError } from "../../core-auth/dist/index.js";
-import { prepareClaudeRequest, parseResetMs } from "../plugin/request.js";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
@@ -18,175 +17,22 @@ import {
   getMaxCooldownSeconds,
   getSetting,
   setSetting,
-  useJavaOrchestrator,
 } from "./settings.js";
 
 const PROVIDER_ID = "claude-code";
-const LANE = "messages"; // Claude subscription limits are account-wide
 
 const manager = new AccountManager(PROVIDER_ID, {
   selection: getSelection(),
   oauth: oauthConfig(),
 });
 
-// Exported so the flag-gated Java-orchestrator delegation shell (javaHandle.ts) and the parity
-// harness share this ONE AccountManager instance (state consistency). Additive; no runtime effect.
+// Exported so the Java-orchestrator delegation shell (javaHandle.ts) and the regression
+// harness share this ONE AccountManager instance (state consistency).
 export { manager };
 
-function isRateLimitStatus(status) {
-  return status === 429 || status === 529;
-}
-
-function errorResponse(status, message) {
-  return new Response(JSON.stringify({ error: { message } }), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-// Resolve the generic "Auto" model: if the request targets claude-code-auto, rewrite
-// the body's model to the TOP of the live Auto ranking (leaderboard #1, excluded
-// filtered). Resolved per-request so it always tracks the current ranking.
-function resolveAutoModel(bodyText, ctx) {
-  let obj;
-  try { obj = bodyText ? JSON.parse(bodyText) : null; } catch { return bodyText; }
-  const requested = String((obj && obj.model) || (ctx && ctx.model) || "");
-  const isAuto = requested === "claude-code-auto" || requested.replace(/^claude-code-/, "") === "auto";
-  if (!isAuto || !obj) return bodyText;
-  const top = getAutoCandidates("claude-code")[0];
-  if (!top) return bodyText;          // no ranking yet — leave as-is
-  obj.model = top;
-  return JSON.stringify(obj);
-}
-
-// The router's assigned model (ctx.model) is authoritative for this request: if the
-// body still carries a different id (e.g. a foreign provider's id injected via
-// ANTHROPIC_DEFAULT_*_MODEL while the tier is mapped here), forwarding it verbatim
-// makes Anthropic 404 ("model may not exist"). Rewrite it to the assignment.
-function applyAssignedModel(bodyText, ctx, log) {
-  const assigned = String((ctx && ctx.model) || "");
-  if (!assigned || assigned === "claude-code-auto" || assigned.replace(/^claude-code-/, "") === "auto") return bodyText;
-  let obj;
-  try { obj = bodyText ? JSON.parse(bodyText) : null; } catch { return bodyText; }
-  if (!obj || !obj.model || obj.model === assigned) return bodyText;
-  log("model rewrite: " + obj.model + " -> " + assigned + " (tier assignment)");
-  obj.model = assigned;
-  return JSON.stringify(obj);
-}
-
 async function handle(request, ctx) {
-  // DORMANT delegation gate (T6c2): default OFF. When ON, run the decision loop through the
-  // TeaVM-compiled Java orchestrator instead. The module — and the TeaVM ESM it pulls in — is
-  // imported ONLY here and ONLY when ON, so a flag-OFF `cc` never loads or executes any of it.
-  if (useJavaOrchestrator()) {
-    const { handleViaJavaOrchestrator } = await import("./javaHandle.js");
-    return handleViaJavaOrchestrator(request, ctx);
-  }
-
-  const log = (ctx && ctx.log) || (() => {});
-
-  const url = request.url;
-  let bodyText;
-  try { bodyText = await request.clone().text(); } catch { bodyText = undefined; }
-  bodyText = resolveAutoModel(bodyText, ctx);
-  bodyText = applyAssignedModel(bodyText, ctx, log);
-  const init = { method: request.method, headers: Object.fromEntries(request.headers), body: bodyText };
-
-  const maxAttempts = getMaxAttempts(); // read per-request so config edits apply without a restart
-  let lastResponse = null;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const acquired = await manager.acquire(LANE);
-    if (!acquired || !acquired.account) {
-      const enabled = manager.list().filter((a) => a.enabled !== false).length;
-      // No ENABLED account at all -> retrying can never help, so return a TERMINAL 400
-      // (chatError) — Claude Code retries 5xx/429 but stops on a 4xx. A raw 503 here
-      // just loops "attempt N/10". If accounts exist but are only cooling down, keep
-      // the retryable 503 so a lifted cooldown can serve.
-      return enabled === 0
-        ? chatError("No Claude account available — all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.", { status: 400 })
-        : errorResponse(503, "No Claude account free right now (all rate-limited). Try again shortly.");
-    }
-    const account = acquired.account;
-    const access = acquired.access;
-    if (!access) { manager.reportError(account.id, attempt, "missing access token"); continue; }
-
-    const proxyUrl = proxyManager.selectForAccount(account.id, PROVIDER_ID);
-
-    let prepared;
-    try { prepared = prepareClaudeRequest(url, init, access); }
-    catch (error) { log("prepare failed: " + error); manager.reportError(account.id, attempt, String(error)); continue; }
-    if (proxyUrl) prepared.init.proxy = proxyUrl; // Bun fetch honors .proxy
-
-    let response;
-    const started = Date.now();
-    let proxyOk = false;
-    try { response = await fetch(prepared.request, prepared.init); proxyOk = !!proxyUrl; }
-    catch (error) {
-      if (proxyUrl) {
-        proxyManager.reportResult(proxyUrl, false);
-        // proxy unreachable -> retry directly (a dead proxy gives no isolation anyway)
-        log("fetch via proxy " + proxyUrl + " failed: " + error + " — retrying directly");
-        try {
-          const directInit = { ...prepared.init };
-          delete directInit.proxy;
-          response = await fetch(prepared.request, directInit);
-        } catch (directError) {
-          log("direct retry failed: " + directError);
-          manager.reportError(account.id, attempt, String(directError));
-          continue;
-        }
-      } else {
-        log("fetch failed: " + error);
-        manager.reportError(account.id, attempt, String(error));
-        continue;
-      }
-    }
-    if (proxyOk) proxyManager.reportResult(proxyUrl, true, Date.now() - started);
-
-    // Capture the subscription rate-limit pools (5h + 7d) from this response so the
-    // Quota view shows real usage — every response carries the unified-* headers.
-    captureQuota(manager, account.id, response.headers);
-
-    if (isRateLimitStatus(response.status)) {
-      lastResponse = response;
-      manager.reportRateLimit(account.id, LANE, parseResetMs(response, attempt));
-      if (proxyUrl) {
-        const fresh = manager.list().find((a) => a.id === account.id) || account;
-        proxyManager.reportRateLimit(proxyUrl, { ipSuspected: accountHasQuota(fresh) });
-      }
-      continue; // rotate account
-    }
-
-    if (response.status === 401) {
-      lastResponse = response;
-      manager.reportError(account.id, attempt, "401 unauthorized");
-      continue; // token may be revoked; try another account
-    }
-
-    if (response.status === 403) {
-      lastResponse = response;
-      // A 403 on /v1/messages with an OAuth token means the token is fundamentally
-      // broken (wrong scopes / console-host token, not a rate limit). Disable the
-      // account so selection skips it and the accounts view flags it for re-login,
-      // then try another account instead of surfacing a raw 403.
-      manager.mutate(account.id, (a) => { a.enabled = false; a.disabledReason = "re-login required (token lacks inference scope)"; });
-      manager.reportError(account.id, attempt, "403 scope");
-      continue;
-    }
-
-    if (response.ok) {
-      manager.reportSuccess(account.id);
-      return response; // already Anthropic format (incl. SSE) — pass through
-    }
-
-    return response; // non-retryable upstream error -> surface as-is
-  }
-
-  // All accounts exhausted — return the REAL upstream 429 (with Anthropic's
-  // anthropic-ratelimit-unified-* headers) so Claude Code renders its native
-  // rate-limit UI ("session limit — resets X"). The loader proxy detects the 429 for
-  // fallback and normalizes non-claude providers into this same native shape.
-  return lastResponse || errorResponse(502, "Claude request failed after " + maxAttempts + " attempts");
+  const { handleViaJavaOrchestrator } = await import("./javaHandle.js");
+  return handleViaJavaOrchestrator(request, ctx);
 }
 
 // Live model catalog: pull the account's available models from Anthropic /v1/models
@@ -260,17 +106,6 @@ export const driver = {
         ],
       },
       {
-        title: "Experimental",
-        fields: [
-          {
-            key: "use_java_orchestrator",
-            label: "Use Java orchestrator (experimental)",
-            type: "boolean",
-            hint: "Route requests through the TeaVM-compiled Java handle orchestrator instead of the TS path. Default off; env HUB_CLAUDE_JAVA_HANDLE=1 also forces it on.",
-          },
-        ],
-      },
-      {
         title: "Rate limits",
         fields: [
           {
@@ -297,7 +132,6 @@ export const driver = {
       if (key === "account_selection_strategy") return getSelection();
       if (key === "default_cooldown_seconds") return getDefaultCooldownSeconds();
       if (key === "max_cooldown_seconds") return getMaxCooldownSeconds();
-      if (key === "use_java_orchestrator") return getSetting("use_java_orchestrator", false) === true;
       return getSetting(key, undefined);
     },
     set: (key, value) => setSetting(key, value),

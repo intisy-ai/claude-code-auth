@@ -27,12 +27,6 @@ import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from
 const PROVIDER_ID = "claude-code";
 const LANE = "messages"; // Claude subscription limits are account-wide (index.ts:24)
 
-// Dormancy marker: bumped once when this (flag-ON-only) module first evaluates. Lets the
-// parity/dormancy test prove the module — and the TeaVM orchestrator it pulls in — is never
-// loaded while the flag is OFF. Harmless no-op counter in production.
-const globalScope = globalThis as any;
-globalScope.__CLAUDE_JAVA_HANDLE_MODULE_LOADS = (globalScope.__CLAUDE_JAVA_HANDLE_MODULE_LOADS || 0) + 1;
-
 // Lazily-memoized dynamic import of the TeaVM ESM — the generated file is staged to
 // src/generated/ by `core/teavm-build.mjs` at build time and bundled by esbuild (deferred).
 let orchestratorPromise = null;
