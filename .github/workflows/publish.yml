@@ -1,13 +1,16 @@
-name: Publish to npm
+name: Publish
 
+# One release = one `v*` tag → publishes BOTH the npm plugin AND the JVM provider jar (as a
+# github-gradle release asset on the same v-release, so the example-server org-scan finds it on
+# `releases/latest`). Replaces the old split (npm-only publish.yml + numeric-tag build.yml).
 on:
   push:
     tags:
       - 'v*'
 
 permissions:
-  id-token: write
-  contents: read
+  id-token: write   # npm provenance
+  contents: write   # create the v-release for the jar asset
 
 jobs:
   publish:
@@ -20,6 +23,7 @@ jobs:
             echo "::error::Tag ${GITHUB_REF_NAME} has patch >= 20 - bump the minor version (reset patch) instead of more patches."
             exit 1
           fi
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -29,8 +33,14 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - run: npm install
+      # `npm run build` runs the TeaVM step (java → src/generated/*.teavm.js), which needs a JDK +
+      # gradle; the old npm-only workflow lacked this.
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
+      - run: npm install
       - run: npm run build
       - run: git diff --exit-code -- README.md
       - run: npx vitest run
@@ -41,6 +51,18 @@ jobs:
           VERSION="${VERSION#v}"
           npm version $VERSION --allow-same-version --no-git-tag-version
 
-      - run: npm publish --provenance --access public
+      - name: Publish npm plugin
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Publish the JVM provider jar onto the SAME v-release. github.token (contents:write) suffices
+      # to create the release + resolve the published githubCompileOnly ai-java dependency; tests are
+      # skipped (they need a side-by-side ai-java checkout absent in CI).
+      - run: chmod +x java/gradlew
+      - name: Publish provider jar
+        working-directory: java
+        run: ./gradlew :claude-provider:jar :claude-provider:publishGithub -Partifact_version=${{ github.ref_name }} -x test -x compileTestJava
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
