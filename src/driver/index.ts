@@ -4,12 +4,12 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { defineProvider, AccountManager, proxyManager, getAutoCandidates, chatError } from "../../core-auth/dist/index.js";
+import { defineProvider, AccountManager } from "../../core-auth/dist/index.js";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
 import { login, loginFlow } from "./login.js";
-import { createClaudeAccounts, captureQuota, accountHasQuota } from "./accounts-controller.js";
+import { createClaudeAccounts } from "./accounts-controller.js";
 import {
   getMaxAttempts,
   getSelection,

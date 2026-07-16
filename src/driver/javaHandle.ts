@@ -1,22 +1,9 @@
 // @ts-nocheck
-// T6c2 — the DORMANT delegation shell that runs claude-code-auth's `handle` decision loop
-// through the TeaVM-compiled Java orchestrator (`ClaudeHandleOrchestrator`, exported as
-// `handleClaudeRequestAsync` from :claude-teavm) instead of the pure-TS path in index.ts.
-//
-// This module is loaded ONLY when the flag is ON (index.ts dynamically imports it inside
-// `handle`), and the TeaVM ESM is loaded ONLY on the first delegated request (lazily-memoized
-// dynamic import below). So with the flag OFF nothing here — and none of the ~MB of TeaVM
-// output — ever evaluates: zero runtime risk to live `cc`.
-//
-// Split of responsibility (mirrors the orchestrator's javadoc / port-grounding-map.md):
-//   - The Java orchestrator owns EVERY decision: the pre-loop body rewrite
-//     (resolveAutoModel/applyAssignedModel/prepareClaudeRequest), the retry loop, the
-//     status→action branching, and the final-fallback choice.
-//   - This TS shell owns only host I/O: the fetch+IP-proxy transport (jsExec, reproducing
-//     index.ts:100-131 verbatim), account acquisition/reporting (jsAcquire/jsReports over the
-//     real `manager`), and building the final `Response` from the orchestrator's decision.
-//   - NO response body ever crosses into Java: on SERVE the RETAINED live `Response` is returned
-//     verbatim (SSE/stream intact); only SYNTHETIC bodies are built here from the decision JSON.
+// The claude handle() implementation: runs the request through the TeaVM-compiled Java
+// ClaudeHandleOrchestrator. Loaded lazily (dynamic import in index.ts) so the ~MB TeaVM bundle
+// only evaluates on the first request, never at plugin registration. The Java orchestrator owns
+// every decision; this shell owns only host I/O (fetch+IP-proxy transport, account acquire/report
+// over the real manager, building the final Response).
 
 import { proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { manager } from "./index.js";

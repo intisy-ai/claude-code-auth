@@ -11,7 +11,6 @@ import {
   ANTHROPIC_VERSION,
   CLAUDE_CODE_SYSTEM,
 } from "../constants.js";
-import { getDefaultCooldownSeconds, getMaxCooldownSeconds } from "../driver/settings.js";
 
 function ensureClaudeCodeSystem(body) {
   if (!body || typeof body !== "object") return body;
@@ -72,20 +71,4 @@ export function prepareClaudeRequest(url, init, access) {
     init: forwardInit,
     streaming,
   };
-}
-
-// Read the rate-limit reset (epoch ms) from an Anthropic 429/529 response.
-export function parseResetMs(response, attempt = 0) {
-  const unified = response.headers.get("anthropic-ratelimit-unified-reset");
-  if (unified) {
-    const secs = Number(unified);
-    if (!Number.isNaN(secs) && secs > 0) return secs * 1000;
-  }
-  const retryAfter = response.headers.get("retry-after");
-  if (retryAfter) {
-    const secs = Number(retryAfter);
-    if (!Number.isNaN(secs) && secs > 0) return Date.now() + secs * 1000;
-  }
-  // exponential fallback: base doubles per attempt, capped at the configured max
-  return Date.now() + Math.min(getDefaultCooldownSeconds() * 1000 * Math.pow(2, attempt), getMaxCooldownSeconds() * 1000);
 }
