@@ -10,13 +10,18 @@ dependencies {
     testImplementation project(":routing")
 
     // Phase 6: ClaudeBackend self-assembles Store/HttpClient/JsonCodec/Clock/Random + a real
-    // AccountManager from the JVM backends + :accounts (io.github.intisy:jvm's `api` dependencies
-    // come along transitively -- no separate :accounts coordinate needed). compileOnly (not
-    // implementation) keeps this module's own jar THIN: the host's ProviderRegistry classloader
-    // already has :jvm on its classpath. Resolved via the test-only composite build in
-    // settings.gradle (includeBuild(aiJavaDir)) substituting this group:module coordinate for the
-    // real :jvm project.
-    compileOnly "io.github.intisy:jvm:0.1.0"
+    // AccountManager from the JVM backends + :accounts. CI has no composite includeBuild, so the
+    // MAIN compile dependency comes from the PUBLISHED ai-java release (1.0.7) via github-gradle's
+    // githubCompileOnly (-> compileOnly). Pinned to the STANDALONE fat asset (ai-java-standalone.jar,
+    // classifier "standalone") because it's the one release asset that bundles jvm.backend + the
+    // shared.manager/shared.model classes (AccountManager/AccountStore/OAuthConfig/Account) this
+    // module needs -- the plain ai-java.jar only has jvm.backend. compileOnly (not implementation)
+    // keeps this module's own jar THIN: the host's ProviderRegistry classloader already has these
+    // classes on its classpath. Pin the version explicitly (no floating version).
+    githubCompileOnly "intisy-ai:ai-java:1.0.7:standalone"
+    // Local dev/test only: the composite includeBuild (settings.gradle) substitutes this
+    // io.github.intisy:jvm coordinate for the real :jvm project, transitively pulling in :accounts.
+    // Tests are skipped in CI (-x test -x compileTestJava) so this never needs to resolve there.
     testImplementation "io.github.intisy:jvm:0.1.0"
 }
 
