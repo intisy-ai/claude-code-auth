@@ -64,11 +64,16 @@ public final class ClaudeProvider implements Provider {
         // Provider-authorize OAuth convention (Task 4): GET /v1/config, GET /v1/oauth/authorize,
         // POST /v1/oauth/exchange. Same side-path discipline as /v1/models and /v1/quota above --
         // checked before the messages orchestrator so that path stays completely untouched.
-        // ClaudeOAuth is self-contained (JVM-only crypto + its own constants); config()/authorize()
-        // need no backend at all, and exchange() only needs backend.http/json/clock.
+        // ClaudeOAuth is self-contained (JVM-only crypto + its own constants); authorize() needs
+        // no backend at all, and exchange() only needs backend.http/json/clock. ClaudeConfig
+        // (real settings GET+PUT persistence -- see class doc) needs the backend Store.
         if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/config")) {
-            return ClaudeOAuth.config();
+            return ClaudeConfig.config(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null));
+        }
+        if (request != null && "PUT".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/config")) {
+            return ClaudeConfig.putConfig(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), request.body);
         }
         if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/oauth/authorize")) {

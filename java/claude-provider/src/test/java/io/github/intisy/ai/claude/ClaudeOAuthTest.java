@@ -14,13 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ClaudeOAuthTest {
 
     @Test
-    void configIsEmpty(@TempDir Path dir) {
-        HttpResponse r = ClaudeOAuth.config();
-        assertEquals(200, r.status);
-        assertTrue(r.body.contains("\"groups\":[]"), r.body);
-    }
-
-    @Test
     void authorizeBuildsRealClaudeUrl(@TempDir Path dir) {
         HttpResponse r = ClaudeOAuth.authorize();
         assertEquals(200, r.status);

@@ -34,10 +34,6 @@ final class ClaudeOAuth {
     private ClaudeOAuth() {
     }
 
-    static HttpResponse config() {
-        return json(200, "{\"groups\":[],\"values\":{}}");
-    }
-
     static HttpResponse authorize() {
         // PKCE S256, matching @openauthjs/openauth's generatePKCE(length = 64) exactly: verifier
         // is base64url(64 random bytes); challenge = base64url(sha256(TextEncoder().encode(verifier))),
