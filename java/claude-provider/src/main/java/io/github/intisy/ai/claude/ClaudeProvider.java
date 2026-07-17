@@ -61,6 +61,25 @@ public final class ClaudeProvider implements Provider {
             return ClaudeUsageFetch.fetch(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), ctx);
         }
 
+        // Provider-authorize OAuth convention (Task 4): GET /v1/config, GET /v1/oauth/authorize,
+        // POST /v1/oauth/exchange. Same side-path discipline as /v1/models and /v1/quota above --
+        // checked before the messages orchestrator so that path stays completely untouched.
+        // ClaudeOAuth is self-contained (JVM-only crypto + its own constants); config()/authorize()
+        // need no backend at all, and exchange() only needs backend.http/json/clock.
+        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/config")) {
+            return ClaudeOAuth.config();
+        }
+        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/oauth/authorize")) {
+            return ClaudeOAuth.authorize();
+        }
+        if (request != null && "POST".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/oauth/exchange")) {
+            ClaudeBackend oauthBackend = ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null);
+            return ClaudeOAuth.exchange(oauthBackend, request.body);
+        }
+
         ClaudeBackend backend = ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null);
         Logger log = loggerFor(ctx);
         ClaudeHandleOrchestrator orchestrator = orchestratorFor(backend);
