@@ -1,0 +1,11 @@
+name: Promote to Experimental
+on:
+  push:
+    tags:
+      - '*'
+      - '!v*'
+permissions:
+  contents: write
+jobs:
+  promote:
+    uses: intisy-ai/workflows/.github/workflows/merge-to-experimental.yml@main
