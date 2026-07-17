@@ -25,6 +25,19 @@ dependencies {
     testImplementation "io.github.intisy:jvm:0.1.0"
 }
 
+// The pinned githubCompileOnly release (ai-java 1.0.7) predates the core-proxy store-threading
+// fix and bundles its OWN stale HandlerCtx (no `store` field) inside its standalone/shaded jar --
+// the github-gradle plugin puts that jar ahead of project(":routing") on the compile classpath,
+// so without this reordering the stale duplicate class wins the classpath scan over the
+// up-to-date :routing sources this module actually wants (see the "keep the jar thin" dependency
+// comments above -- :routing was always meant to be the sole source of routing/HandlerCtx
+// classes). Prepend :routing's own compiled output so it resolves first for both compile tasks.
+[compileJava, compileTestJava].each { t ->
+    t.doFirst {
+        t.classpath = files(project(":routing").sourceSets.main.output.classesDirs) + t.classpath
+    }
+}
+
 // Keep the jar filename version-less (claude-provider.jar) even though project.version is now set
 // (for publishGithub's package version) -- publishGithub's artifacts block below references
 // build/libs/claude-provider.jar by that exact name.

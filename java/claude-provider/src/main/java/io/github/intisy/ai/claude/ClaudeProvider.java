@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ClaudeProvider implements Provider {
 
-    public static final String ID = "claude";
+    public static final String ID = "claude-code-auth";
 
     // One orchestrator per backend (memoized): the orchestrator is stateless across requests --
     // every per-request value (inputs/config/seams) is a handle() parameter, not ctor state.
@@ -50,7 +50,7 @@ public final class ClaudeProvider implements Provider {
         // upstream fetch). Checked first so the messages path stays completely untouched.
         if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/models")) {
-            return ClaudeModelsFetch.fetch(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), ctx);
+            return ClaudeModelsFetch.fetch(ClaudeBackend.forCtx(ctx), ctx);
         }
 
         // Quota-display Task 1: dashboard usage-display calls GET .../v1/quota -- same side-path
@@ -58,10 +58,34 @@ public final class ClaudeProvider implements Provider {
         // upstream fetches). Checked before the messages path so it stays completely untouched.
         if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/quota")) {
-            return ClaudeUsageFetch.fetch(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), ctx);
+            return ClaudeUsageFetch.fetch(ClaudeBackend.forCtx(ctx), ctx);
         }
 
-        ClaudeBackend backend = ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null);
+        // Provider-authorize OAuth convention (Task 4): GET /v1/config, GET /v1/oauth/authorize,
+        // POST /v1/oauth/exchange. Same side-path discipline as /v1/models and /v1/quota above --
+        // checked before the messages orchestrator so that path stays completely untouched.
+        // ClaudeOAuth is self-contained (JVM-only crypto + its own constants); authorize() needs
+        // no backend at all, and exchange() only needs backend.http/json/clock. ClaudeConfig
+        // (real settings GET+PUT persistence -- see class doc) needs the backend Store.
+        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/config")) {
+            return ClaudeConfig.config(ClaudeBackend.forCtx(ctx));
+        }
+        if (request != null && "PUT".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/config")) {
+            return ClaudeConfig.putConfig(ClaudeBackend.forCtx(ctx), request.body);
+        }
+        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/oauth/authorize")) {
+            return ClaudeOAuth.authorize();
+        }
+        if (request != null && "POST".equalsIgnoreCase(request.method) && request.url != null
+                && request.url.endsWith("/v1/oauth/exchange")) {
+            ClaudeBackend oauthBackend = ClaudeBackend.forCtx(ctx);
+            return ClaudeOAuth.exchange(oauthBackend, request.body);
+        }
+
+        ClaudeBackend backend = ClaudeBackend.forCtx(ctx);
         Logger log = loggerFor(ctx);
         ClaudeHandleOrchestrator orchestrator = orchestratorFor(backend);
 
