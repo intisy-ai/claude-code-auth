@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ClaudeProvider implements Provider {
 
-    public static final String ID = "claude";
+    public static final String ID = "claude-code-auth";
 
     // One orchestrator per backend (memoized): the orchestrator is stateless across requests --
     // every per-request value (inputs/config/seams) is a handle() parameter, not ctor state.

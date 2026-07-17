@@ -31,8 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ClaudeProviderTest {
 
     @Test
-    void id_isClaude() {
-        assertEquals("claude", new ClaudeProvider().id());
+    void id_isClaudeCodeAuth() {
+        assertEquals("claude-code-auth", new ClaudeProvider().id());
     }
 
     @Test

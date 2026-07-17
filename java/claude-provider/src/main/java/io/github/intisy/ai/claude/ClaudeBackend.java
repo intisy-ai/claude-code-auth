@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class ClaudeBackend {
 
-    static final String PROVIDER_ID = "claude";
+    static final String PROVIDER_ID = "claude-code-auth";
 
     private static final String CLAUDE_TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
     private static final String CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
