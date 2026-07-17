@@ -50,7 +50,7 @@ public final class ClaudeProvider implements Provider {
         // upstream fetch). Checked first so the messages path stays completely untouched.
         if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/models")) {
-            return ClaudeModelsFetch.fetch(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), ctx);
+            return ClaudeModelsFetch.fetch(ClaudeBackend.forCtx(ctx), ctx);
         }
 
         // Quota-display Task 1: dashboard usage-display calls GET .../v1/quota -- same side-path
@@ -58,7 +58,7 @@ public final class ClaudeProvider implements Provider {
         // upstream fetches). Checked before the messages path so it stays completely untouched.
         if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/quota")) {
-            return ClaudeUsageFetch.fetch(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), ctx);
+            return ClaudeUsageFetch.fetch(ClaudeBackend.forCtx(ctx), ctx);
         }
 
         // Provider-authorize OAuth convention (Task 4): GET /v1/config, GET /v1/oauth/authorize,
@@ -69,11 +69,11 @@ public final class ClaudeProvider implements Provider {
         // (real settings GET+PUT persistence -- see class doc) needs the backend Store.
         if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/config")) {
-            return ClaudeConfig.config(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null));
+            return ClaudeConfig.config(ClaudeBackend.forCtx(ctx));
         }
         if (request != null && "PUT".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/config")) {
-            return ClaudeConfig.putConfig(ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null), request.body);
+            return ClaudeConfig.putConfig(ClaudeBackend.forCtx(ctx), request.body);
         }
         if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/oauth/authorize")) {
@@ -81,11 +81,11 @@ public final class ClaudeProvider implements Provider {
         }
         if (request != null && "POST".equalsIgnoreCase(request.method) && request.url != null
                 && request.url.endsWith("/v1/oauth/exchange")) {
-            ClaudeBackend oauthBackend = ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null);
+            ClaudeBackend oauthBackend = ClaudeBackend.forCtx(ctx);
             return ClaudeOAuth.exchange(oauthBackend, request.body);
         }
 
-        ClaudeBackend backend = ClaudeBackend.forConfigDir(ctx != null ? ctx.configDir : null);
+        ClaudeBackend backend = ClaudeBackend.forCtx(ctx);
         Logger log = loggerFor(ctx);
         ClaudeHandleOrchestrator orchestrator = orchestratorFor(backend);
 

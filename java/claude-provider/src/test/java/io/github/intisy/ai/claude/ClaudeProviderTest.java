@@ -114,6 +114,53 @@ class ClaudeProviderTest {
         assertEquals(1, http.requests.size());
     }
 
+    @Test
+    void servesFromInjectedStore_notFileStore() {
+        MapStore store = new MapStore();
+        ScriptedHttpClient http = new ScriptedHttpClient()
+                .enqueueOk(200, "{\"id\":\"msg_s\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}");
+        ClaudeBackend backend = ClaudeBackend.forTest(store, http);
+        ClaudeBackend.registerForTest(store, backend);
+        backend.accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-s"));
+
+        HttpRequest request = new HttpRequest();
+        request.method = "POST";
+        request.url = "/v1/messages";
+        request.body = "{\"model\":\"claude-code-sonnet\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}";
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.store = store; // NO configDir -- must serve from the injected store, not FileStore
+
+        HttpResponse response = new ClaudeProvider().handle(request, ctx);
+
+        assertEquals(200, response.status, response.body);
+        assertEquals(1, http.requests.size());
+        // the seeded account must live in the INJECTED store (single source of truth)
+        boolean inStore = false;
+        for (String k : store.listKeys(null)) {
+            String v = store.get(k);
+            if (v != null && v.contains("acct-s")) { inStore = true; break; }
+        }
+        assertTrue(inStore, "the account must live in the injected store, proving the provider used it");
+    }
+
+    /** Minimal in-memory {@link io.github.intisy.ai.shared.spi.Store} test double (6-method SPI). */
+    private static final class MapStore implements io.github.intisy.ai.shared.spi.Store {
+        private final java.util.Map<String, String> m = new java.util.concurrent.ConcurrentHashMap<>();
+        public String get(String k) { return m.get(k); }
+        public void put(String k, String v) { m.put(k, v); }
+        public boolean exists(String k) { return m.containsKey(k); }
+        public void delete(String k) { m.remove(k); }
+        public synchronized void update(String k, java.util.function.UnaryOperator<String> f) {
+            String nv = f.apply(m.get(k));
+            if (nv == null) m.remove(k); else m.put(k, nv);
+        }
+        public java.util.List<String> listKeys(String prefix) {
+            java.util.List<String> out = new java.util.ArrayList<>();
+            for (String k : m.keySet()) if (prefix == null || k.startsWith(prefix)) out.add(k);
+            return out;
+        }
+    }
+
     // ---- shared fixtures -----------------------------------------------------------------------
 
     private static ClaudeBackend registerTestBackend(Path configDir, HttpClient http) {

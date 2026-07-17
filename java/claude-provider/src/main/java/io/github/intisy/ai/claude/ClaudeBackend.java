@@ -8,6 +8,7 @@ import io.github.intisy.ai.jvm.backend.store.FileStore;
 import io.github.intisy.ai.shared.manager.AccountManager;
 import io.github.intisy.ai.shared.manager.ManagerOptions;
 import io.github.intisy.ai.shared.oauth.OAuthConfig;
+import io.github.intisy.ai.shared.routing.HandlerCtx;
 import io.github.intisy.ai.shared.spi.Clock;
 import io.github.intisy.ai.shared.spi.HttpClient;
 import io.github.intisy.ai.shared.spi.JsonCodec;
@@ -38,6 +39,7 @@ final class ClaudeBackend {
     private static final String CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
     private static final ConcurrentHashMap<String, ClaudeBackend> CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Store, ClaudeBackend> STORE_CACHE = new ConcurrentHashMap<>();
 
     final JsonCodec json;
     final Clock clock;
@@ -60,10 +62,17 @@ final class ClaudeBackend {
      * (package-private, only {@link #forConfigDir} is public API).
      */
     ClaudeBackend(String configDir, HttpClient http) {
-        FileStore store = (configDir != null && !configDir.trim().isEmpty())
+        this(configFileStore(configDir), http);
+    }
+
+    private static Store configFileStore(String configDir) {
+        return (configDir != null && !configDir.trim().isEmpty())
                 ? new FileStore(Paths.get(configDir))
                 : FileStore.fromEnv();
+    }
 
+    /** Assembly ctor: takes the {@link Store} directly (no self-assembled {@code FileStore}). */
+    private ClaudeBackend(Store store, HttpClient http) {
         this.json = new GsonJsonCodec();
         this.clock = new SystemClock();
         this.random = new SecureRandomAdapter();
@@ -89,9 +98,27 @@ final class ClaudeBackend {
         return CACHE.computeIfAbsent(key, ClaudeBackend::new);
     }
 
+    /** Memoized per {@link Store} identity: the server injects one store per host, so this keeps
+     *  one backend/{@code AccountManager} per store, mirroring {@link #forConfigDir}'s memoization. */
+    static ClaudeBackend forStore(Store store) {
+        return STORE_CACHE.computeIfAbsent(store, s -> new ClaudeBackend(s, new UrlConnectionHttpClient()));
+    }
+
+    /** Serving entry point: prefer the server's injected store; fall back to a FileStore only for a
+     *  legacy/store-less host (ctx.store == null) -- behavior-neutral there. Never forces a store. */
+    static ClaudeBackend forCtx(HandlerCtx ctx) {
+        if (ctx != null && ctx.store != null) return forStore(ctx.store);
+        return forConfigDir(ctx != null ? ctx.configDir : null);
+    }
+
     /** Test-only factory: a fresh (unmemoized) backend with an injected {@link HttpClient}. */
     static ClaudeBackend forTest(String configDir, HttpClient http) {
         return new ClaudeBackend(configDir, http);
+    }
+
+    /** Test-only factory: a fresh (unmemoized) backend built directly from an injected {@link Store}. */
+    static ClaudeBackend forTest(Store store, HttpClient http) {
+        return new ClaudeBackend(store, http);
     }
 
     /**
@@ -102,5 +129,12 @@ final class ClaudeBackend {
      */
     static void registerForTest(String configDir, ClaudeBackend backend) {
         CACHE.put(configDir != null ? configDir : "", backend);
+    }
+
+    /** Test-only: pre-seeds {@link #STORE_CACHE} so a subsequent {@link #forCtx}/{@link #forStore}
+     *  call for this store resolves to the given (already-built, presumably {@link #forTest})
+     *  backend instead of self-assembling a production one. */
+    static void registerForTest(Store store, ClaudeBackend backend) {
+        STORE_CACHE.put(store, backend);
     }
 }
