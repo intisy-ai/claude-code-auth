@@ -1,13 +1,15 @@
 package io.github.intisy.ai.claude;
 
 import io.github.intisy.ai.shared.model.Account;
-import io.github.intisy.ai.shared.routing.HandlerCtx;
+import io.github.intisy.ai.shared.routing.AccountQuota;
+import io.github.intisy.ai.shared.routing.QuotaBar;
 import io.github.intisy.ai.shared.spi.http.HttpRequest;
 import io.github.intisy.ai.shared.spi.http.HttpResponse;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,9 +22,11 @@ import java.util.Map;
  *
  * <p>Unlike {@link ClaudeModelsFetch} (single first-enabled-account discovery), this fetches usage
  * for EVERY enabled account and persists each one's pools to {@code meta.cachedQuota} so the
- * dashboard has a durable cache even between live fetches. Never throws: a failure fetching one
- * account's usage folds into an {@code error} entry for that account only -- it never aborts the
- * whole response, matching the "one account fails" test`s "still 200 overall" contract.
+ * dashboard has a durable cache even between live fetches. {@link #quota} never throws: a failure
+ * fetching one account's usage folds into an {@code AccountQuota} with {@code accountStatus =
+ * "error"} and empty {@code bars} for that account only -- it never aborts the whole list, and the
+ * account itself is still represented (matching {@link AccountQuota}'s own preserve-bar-less-
+ * accounts contract).
  */
 final class ClaudeUsageFetch {
 
@@ -31,69 +35,50 @@ final class ClaudeUsageFetch {
     private ClaudeUsageFetch() {
     }
 
-    static HttpResponse fetch(ClaudeBackend backend, HandlerCtx ctx) {
-        try {
-            return doFetch(backend);
-        } catch (Throwable e) {
-            // Never throw out of a provider handle() path -- any unexpected failure folds into
-            // the same api_error shape an upstream failure would. Never include e.getMessage()
-            // here: it could echo back a header/token fragment from a lower-level failure.
-            return ClaudeProvider.errorResponse(502, "api_error", "quota fetch failed");
-        }
-    }
-
-    private static HttpResponse doFetch(ClaudeBackend backend) {
-        List<Object> entries = new ArrayList<>();
+    /** {@link io.github.intisy.ai.shared.routing.QuotaProvider#quota}. */
+    static List<AccountQuota> quota(ClaudeBackend backend) {
+        List<AccountQuota> out = new ArrayList<>();
         for (Account account : backend.accountStore.list(ClaudeBackend.PROVIDER_ID)) {
             if (account.enabled == Boolean.FALSE) continue;
-            entries.add(entryFor(backend, account));
+            out.add(accountQuotaFor(backend, account));
         }
-
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("accounts", entries);
-
-        HttpResponse out = new HttpResponse();
-        out.status = 200;
-        out.headers = new LinkedHashMap<>();
-        out.headers.put("content-type", "application/json");
-        out.body = backend.json.stringify(body);
         return out;
     }
 
     // Never rethrows -- any failure for THIS account (refresh, network, non-2xx, malformed body)
-    // folds into an error entry so one bad account never breaks the whole /v1/quota response.
-    private static Map<String, Object> entryFor(ClaudeBackend backend, Account account) {
+    // folds into an error AccountQuota so one bad account never breaks the whole quota() call.
+    private static AccountQuota accountQuotaFor(ClaudeBackend backend, Account account) {
         try {
-            return doEntryFor(backend, account);
+            return doAccountQuotaFor(backend, account);
         } catch (Throwable e) {
-            return errorEntry(account);
+            return errorAccountQuota(account);
         }
     }
 
-    private static Map<String, Object> doEntryFor(ClaudeBackend backend, Account account) {
+    private static AccountQuota doAccountQuotaFor(ClaudeBackend backend, Account account) {
         String access;
         try {
             access = backend.accounts.ensureAccess(account.id);
         } catch (RuntimeException e) {
-            return errorEntry(account);
+            return errorAccountQuota(account);
         }
         if (access == null || access.trim().isEmpty()) {
-            return errorEntry(account);
+            return errorAccountQuota(account);
         }
 
         HttpResponse resp;
         try {
             resp = backend.http.send(buildRequest(access));
         } catch (RuntimeException e) {
-            return errorEntry(account);
+            return errorAccountQuota(account);
         }
         if (resp.status / 100 != 2) {
-            return errorEntry(account);
+            return errorAccountQuota(account);
         }
 
         Map<String, Object> pools = parsePools(backend, resp.body);
         if (pools == null) {
-            return errorEntry(account);
+            return errorAccountQuota(account);
         }
 
         persistCachedQuota(backend, account.id, pools);
@@ -108,12 +93,16 @@ final class ClaudeUsageFetch {
         List<Map<String, Object>> quota = ClaudeQuotaParser.claudeQuota(synth);
         boolean active = ClaudeQuotaParser.accountHasQuota(synth);
 
-        Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("id", account.id);
-        if (account.email != null) entry.put("email", account.email);
-        entry.put("status", active ? "active" : "rate-limited");
-        entry.put("quota", quota);
-        return entry;
+        List<QuotaBar> bars = new ArrayList<>();
+        if (quota != null) {
+            for (Map<String, Object> bar : quota) {
+                bars.add(new QuotaBar(
+                        (String) bar.get("label"),
+                        fractionOf(bar.get("remainingFraction")),
+                        isoResetTime(bar.get("resetTime"))));
+            }
+        }
+        return new AccountQuota(account.id, account.email, active ? "active" : "rate-limited", bars);
     }
 
     private static void persistCachedQuota(ClaudeBackend backend, String accountId, Map<String, Object> pools) {
@@ -126,13 +115,21 @@ final class ClaudeUsageFetch {
         });
     }
 
-    private static Map<String, Object> errorEntry(Account account) {
-        Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("id", account.id);
-        if (account.email != null) entry.put("email", account.email);
-        entry.put("status", "error");
-        entry.put("quota", null);
-        return entry;
+    private static AccountQuota errorAccountQuota(Account account) {
+        return new AccountQuota(account.id, account.email, "error", Collections.<QuotaBar>emptyList());
+    }
+
+    private static double fractionOf(Object remainingFraction) {
+        return remainingFraction instanceof Number ? ((Number) remainingFraction).doubleValue() : 0.0;
+    }
+
+    // The pre-migration wire shape carried resetTime as a raw epoch-ms number (see epochMs()
+    // below); QuotaBar.resetTime is a String on the typed SPI, so re-encode the SAME instant as
+    // ISO-8601 rather than dropping it -- a lossless format change, not a dropped field.
+    private static String isoResetTime(Object resetTimeEpochMs) {
+        return resetTimeEpochMs instanceof Number
+                ? Instant.ofEpochMilli(((Number) resetTimeEpochMs).longValue()).toString()
+                : null;
     }
 
     private static HttpRequest buildRequest(String access) {

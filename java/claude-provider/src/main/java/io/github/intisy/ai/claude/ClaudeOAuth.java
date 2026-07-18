@@ -1,5 +1,6 @@
 package io.github.intisy.ai.claude;
 
+import io.github.intisy.ai.shared.routing.AuthorizeInfo;
 import io.github.intisy.ai.shared.spi.http.HttpRequest;
 import io.github.intisy.ai.shared.spi.http.HttpResponse;
 
@@ -10,6 +11,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -20,6 +22,16 @@ import java.util.Map;
  * verbatim from {@code providers/claude-code-auth/src/oauth/oauth.ts} +
  * {@code src/constants.ts}. Claude is a PUBLIC client -- no secret. Never logs
  * code/verifier/state/tokens.
+ *
+ * <p>{@link #authorizeInfo()}/{@link #exchangeValues} are the typed {@link
+ * io.github.intisy.ai.shared.routing.OAuthProvider} entry points {@link ClaudeProvider} delegates
+ * to. There is no HttpResponse wrapper anymore -- nothing but the retired {@code GET/POST
+ * /v1/oauth/*} branches ever called the old {@code authorize()}/{@code exchange()} methods.
+ * {@code exchangeValues} throws {@link IllegalStateException} on any failure (missing PKCE
+ * verifier, token-exchange transport/HTTP failure, missing refresh token) since the typed {@code
+ * Map<String,Object> exchange(...)} contract has no status/error-body shape to carry a reason in
+ * -- the caller (e.g. the dashboard's OAuth admin) catches and translates, the same way it already
+ * catches {@code handler.handle()} exceptions today.
  */
 final class ClaudeOAuth {
     private static final String AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
@@ -34,7 +46,8 @@ final class ClaudeOAuth {
     private ClaudeOAuth() {
     }
 
-    static HttpResponse authorize() {
+    /** {@link io.github.intisy.ai.shared.routing.OAuthProvider#authorize}. */
+    static AuthorizeInfo authorizeInfo() {
         // PKCE S256, matching @openauthjs/openauth's generatePKCE(length = 64) exactly: verifier
         // is base64url(64 random bytes); challenge = base64url(sha256(TextEncoder().encode(verifier))),
         // i.e. sha256 over the UTF-8 bytes of the base64url-encoded verifier STRING (not the raw
@@ -55,21 +68,23 @@ final class ClaudeOAuth {
                 + "&code_challenge=" + enc(challenge)
                 + "&code_challenge_method=S256"
                 + "&state=" + enc(state);
-        return json(200, "{\"authorizeUrl\":" + quote(url) + ",\"completion\":\"paste\"}");
+        // loopbackPort/loopbackPath stay null -- Claude is a "paste" flow, not a local-redirect-
+        // listener flow (mirrors the old JSON, which never carried them either).
+        return new AuthorizeInfo(url, "paste", state, null, null);
     }
 
-    /** Thin entrypoint used by the provider: parse {@code {code,state}} from the request body. */
-    static HttpResponse exchange(ClaudeBackend backend, String requestBody) {
+    /** {@link io.github.intisy.ai.shared.routing.OAuthProvider#exchange}: parses {@code {code,state}} from the raw request body. */
+    static Map<String, Object> exchangeValues(ClaudeBackend backend, String requestBody) {
         Map<String, Object> body = asMap(backend.json.parse(requestBody != null ? requestBody : ""));
         String code = body != null ? stringOf(body.get("code")) : null;
         String state = body != null ? stringOf(body.get("state")) : null;
-        return exchange(backend, code, state);
+        return exchangeValues(backend, code, state);
     }
 
-    static HttpResponse exchange(ClaudeBackend backend, String code, String state) {
+    static Map<String, Object> exchangeValues(ClaudeBackend backend, String code, String state) {
         String verifier = verifierFromState(state);
         if (verifier == null) {
-            return json(400, "{\"error\":\"missing PKCE verifier in state\"}");
+            throw new IllegalStateException("missing PKCE verifier in state");
         }
         // Field set matches exchangeClaude()'s JSON.stringify body exactly, including sending
         // `state` back to the token endpoint (the TS does this even though it already decoded it).
@@ -92,28 +107,27 @@ final class ClaudeOAuth {
         try {
             resp = backend.http.send(req);
         } catch (Exception e) {
-            return json(502, "{\"error\":\"claude token exchange failed\"}");
+            throw new IllegalStateException("claude token exchange failed");
         }
         if (resp.status / 100 != 2) {
-            return json(resp.status, "{\"error\":\"claude token endpoint returned " + resp.status + "\"}");
+            throw new IllegalStateException("claude token endpoint returned " + resp.status);
         }
         Map<String, Object> payload = asMap(backend.json.parse(resp.body));
         String refresh = payload != null ? stringOf(payload.get("refresh_token")) : null;
         if (refresh == null) {
-            return json(502, "{\"error\":\"missing refresh token in response\"}");
+            throw new IllegalStateException("missing refresh token in response");
         }
         String access = stringOf(payload.get("access_token"));
         long expires = calcExpiry(backend.clock.now(), payload.get("expires_in"));
         String email = emailFrom(payload);
 
-        StringBuilder sb = new StringBuilder("{\"account\":{");
-        sb.append("\"id\":").append(quote(email != null ? email : refresh)).append(',');
-        if (email != null) sb.append("\"email\":").append(quote(email)).append(',');
-        sb.append("\"refresh\":").append(quote(refresh));
-        if (access != null) sb.append(",\"access\":").append(quote(access));
-        sb.append(",\"expires\":").append(expires);
-        sb.append("}}");
-        return json(200, sb.toString());
+        Map<String, Object> account = new LinkedHashMap<>();
+        account.put("id", email != null ? email : refresh);
+        if (email != null) account.put("email", email);
+        account.put("refresh", refresh);
+        if (access != null) account.put("access", access);
+        account.put("expires", expires);
+        return Collections.<String, Object>singletonMap("account", account);
     }
 
     // --- helpers ---
@@ -174,15 +188,6 @@ final class ClaudeOAuth {
         } catch (UnsupportedEncodingException e) {
             return s;
         }
-    }
-
-    private static HttpResponse json(int status, String body) {
-        HttpResponse r = new HttpResponse();
-        r.status = status;
-        r.headers = new LinkedHashMap<>();
-        r.headers.put("content-type", "application/json");
-        r.body = body;
-        return r;
     }
 
     @SuppressWarnings("unchecked")
