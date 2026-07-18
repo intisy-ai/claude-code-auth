@@ -1,5 +1,9 @@
 package io.github.intisy.ai.claude;
 
+import io.github.intisy.ai.ir.Block;
+import io.github.intisy.ai.ir.IrRequest;
+import io.github.intisy.ai.ir.TextBlock;
+import io.github.intisy.ai.ir.translators.anthropic.AnthropicTranslator;
 import io.github.intisy.ai.shared.spi.JsonCodec;
 
 import java.util.ArrayList;
@@ -10,15 +14,28 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Java port of claude-code-auth's {@code src/plugin/request.ts} (Bucket A of
- * {@code .superpowers/port-grounding-map.md}): {@code ensureClaudeCodeSystem},
- * {@code mergeBeta}, {@code prepareClaudeRequest}, and the HEADER-PARSE half of
- * {@code parseResetMs}. The exponential-backoff fallback branch of {@code parseResetMs}
- * (request.ts:89-91) is DELIBERATELY DROPPED here -- it reads
+ * Java port of claude-code-auth's original {@code src/plugin/request.ts} (Bucket A of
+ * {@code .superpowers/port-grounding-map.md}; the TS file itself was DELETED in SP-2 -- it had
+ * become dead code, superseded by this class): {@code mergeBeta}, {@code prepareClaudeRequest},
+ * and the HEADER-PARSE half of {@code parseResetMs}. The exponential-backoff fallback branch of
+ * {@code parseResetMs} (request.ts:89-91) is DELIBERATELY DROPPED here -- it reads
  * {@code getDefaultCooldownSeconds()}/{@code getMaxCooldownSeconds()} from core's config store
  * (Bucket B I/O), and belongs to core-auth's {@code RateLimitMath} instead. This class returns
  * {@code null} from {@link #parseResetMs} where the TS would have fallen through to that branch;
  * the caller is expected to invoke {@code RateLimitMath} in that case.
+ *
+ * <p><b>SP-2 (core-ir):</b> {@code prepareClaudeRequest} used to hand-rewrite the parsed request
+ * body's {@code system} field directly on the raw JSON {@code Map} tree ({@code
+ * ensureClaudeCodeSystem}, now DELETED). It now round-trips the body through core-ir instead --
+ * {@code AnthropicTranslator.decodeRequest} (inbound Anthropic wire -&gt; {@link IrRequest}),
+ * {@link #ensureClaudeCodeSystemBlocks} (the identity-block dedup/prepend, now operating on
+ * {@code IrRequest.system}'s neutral {@link Block} list), then {@code encodeRequest} back to the
+ * Anthropic body actually sent upstream. Since claude's upstream IS Anthropic, this is an IR
+ * round trip on the SAME vendor format -- semantically lossless (core-ir's extensions bags carry
+ * anything with no neutral IR home), though the re-encoded JSON's key order can differ from the
+ * original (never wire-significant). Bearer/anthropic-version/anthropic-beta headers stay
+ * provider-own upstream-auth concerns, applied to the encoded body exactly as before -- NOT
+ * format translation, so they are untouched by this migration.
  *
  * <p>Only the {@link JsonCodec} SPI is used (to parse/stringify the request body) -- no
  * HttpClient/Store, no gson/java.net/java.nio/reflection/threads/System.getenv, so this class is
@@ -34,75 +51,63 @@ public final class AnthropicRequestTranslator {
     private AnthropicRequestTranslator() {
     }
 
-    // ---- ensureClaudeCodeSystem (request.ts:16-30) -------------------------------------------
+    // ---- ensureClaudeCodeSystemBlocks (request.ts:16-30, ported to the IR for SP-2) ------------
 
     /**
-     * Injects the mandatory Claude-Code system-identity block into a parsed request body,
-     * mirroring the TS dedup rules EXACTLY:
-     * <ul>
-     *   <li>{@code body} not a JSON object (including {@code null}) -&gt; returned unchanged.</li>
-     *   <li>{@code body.system} a String equal to {@link #CLAUDE_CODE_SYSTEM} -&gt; replaced with
-     *       {@code [identity]} (no duplicate second block).</li>
-     *   <li>{@code body.system} any OTHER String -&gt; {@code [identity, {type:"text",
-     *       text: originalString}]}.</li>
-     *   <li>{@code body.system} a List whose first element is already the identity block ({@code
-     *       {type:"text", text: CLAUDE_CODE_SYSTEM}}) -&gt; left untouched (dedup).</li>
-     *   <li>{@code body.system} any OTHER List -&gt; identity block prepended.</li>
-     *   <li>{@code body.system} absent, {@code null}, or any non-String/non-List value (matches
-     *       the TS {@code else} branch -- note {@code null} falls here too, since
-     *       {@code typeof null !== "string"} and {@code Array.isArray(null)} is false in JS)
-     *       -&gt; replaced with {@code [identity]}.</li>
-     * </ul>
+     * Ensures {@code system} starts with the Claude-Code identity block, without duplicating it
+     * if already present -- the IR-level replacement for the old raw-JSON {@code
+     * ensureClaudeCodeSystem}. Once normalized into core-ir's neutral {@link Block} list, the
+     * original three-way TS/JSON branch (string / array / else, since JS distinguishes {@code
+     * typeof} string from {@code Array.isArray}) collapses into ONE rule: a bare wire string and
+     * a single-element wire array decode to the IDENTICAL one-{@link TextBlock} shape, so the
+     * same "does it already start with the identity block" check handles every case correctly --
+     * absent/{@code null}/non-string-non-array system, an empty array, a plain string, and a
+     * block array all decode through {@code AnthropicRequestCodec} to either {@code null}/empty
+     * or a {@code List<Block>}, verified against every case the deleted method's own unit tests
+     * covered.
+     *
+     * @return {@code [identity]} when {@code system} is {@code null}/empty; {@code system}
+     *     unchanged when it already starts with the identity block; otherwise the identity block
+     *     prepended.
      */
-    @SuppressWarnings("unchecked")
-    public static Object ensureClaudeCodeSystem(Object body) {
-        if (!(body instanceof Map)) return body;
-        Map<String, Object> map = (Map<String, Object>) body;
-        Object system = map.get("system");
-        if (system instanceof String) {
-            if (system.equals(CLAUDE_CODE_SYSTEM)) {
-                map.put("system", singletonList(identityBlock()));
-            } else {
-                List<Object> list = new ArrayList<>();
-                list.add(identityBlock());
-                Map<String, Object> textBlock = new LinkedHashMap<>();
-                textBlock.put("type", "text");
-                textBlock.put("text", system);
-                list.add(textBlock);
-                map.put("system", list);
-            }
-        } else if (system instanceof List) {
-            List<?> list = (List<?>) system;
-            Object first = list.isEmpty() ? null : list.get(0);
-            if (!isIdentityBlock(first)) {
-                List<Object> merged = new ArrayList<>();
-                merged.add(identityBlock());
-                merged.addAll(list);
-                map.put("system", merged);
-            }
-        } else {
-            map.put("system", singletonList(identityBlock()));
+    public static List<Block> ensureClaudeCodeSystemBlocks(List<Block> system) {
+        if (system == null || system.isEmpty()) {
+            List<Block> singleton = new ArrayList<>();
+            singleton.add(freshIdentityBlock());
+            return singleton;
         }
-        return map;
+        Block first = system.get(0);
+        if (isIdentityBlock(first)) {
+            if (system.size() == 1 && first.extensions == null) {
+                // Force a non-null (empty) extensions map on the EXISTING block -- in place, so
+                // any real cache_control it carries is preserved untouched -- so the encode side
+                // can never collapse it back into a bare wire STRING. Relevant when the inbound
+                // wire `system` was itself the identity string verbatim, which core-ir's
+                // AnthropicTranslator would otherwise reproduce as a string (a valid but different
+                // wire shape than the original ad hoc code's "always an array" behavior). Safe: a
+                // block only looks "plain" (no cache_control, no extensions) if it came from a
+                // bare string OR a metadata-free single-element array -- in both cases there is
+                // nothing to lose; a block with a REAL cache_control already has extensions==null
+                // possibly true too, which is exactly why this only forces extensions, never
+                // touching cacheControl.
+                first.extensions = new LinkedHashMap<>();
+            }
+            return system; // already present (with or without extra turns after it) -- untouched
+        }
+        List<Block> merged = new ArrayList<>();
+        merged.add(freshIdentityBlock());
+        merged.addAll(system);
+        return merged;
     }
 
-    private static boolean isIdentityBlock(Object first) {
-        if (!(first instanceof Map)) return false;
-        Map<?, ?> m = (Map<?, ?>) first;
-        return "text".equals(m.get("type")) && CLAUDE_CODE_SYSTEM.equals(m.get("text"));
+    private static boolean isIdentityBlock(Block b) {
+        return b instanceof TextBlock && CLAUDE_CODE_SYSTEM.equals(((TextBlock) b).text);
     }
 
-    private static Map<String, Object> identityBlock() {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("type", "text");
-        m.put("text", CLAUDE_CODE_SYSTEM);
-        return m;
-    }
-
-    private static List<Object> singletonList(Object o) {
-        List<Object> l = new ArrayList<>();
-        l.add(o);
-        return l;
+    private static TextBlock freshIdentityBlock() {
+        TextBlock t = new TextBlock(CLAUDE_CODE_SYSTEM);
+        t.extensions = new LinkedHashMap<>();
+        return t;
     }
 
     // ---- mergeBeta (request.ts:32-35) --------------------------------------------------------
@@ -160,24 +165,30 @@ public final class AnthropicRequestTranslator {
         String path = pathOf(url);
 
         String bodyText = init.body;
-        Object parsed = null;
+        boolean streaming = false;
+
         if (bodyText != null && !bodyText.isEmpty()) {
+            Object parsed;
             try {
                 parsed = json.parse(bodyText);
             } catch (RuntimeException e) {
                 parsed = null; // matches the TS try/catch { parsed = undefined }
             }
-        }
-
-        boolean streaming = false;
-        if (parsed != null && JsCoercion.isTruthy(parsed)) {
-            Object streamVal = (parsed instanceof Map) ? ((Map<?, ?>) parsed).get("stream") : null;
-            streaming = JsCoercion.isTruthy(streamVal);
-        }
-
-        if (parsed != null && JsCoercion.isTruthy(parsed)) {
-            Object updated = ensureClaudeCodeSystem(parsed);
-            bodyText = json.stringify(updated);
+            // Only a genuine JSON object round-trips through the IR (an Anthropic Messages
+            // request body always is one); malformed JSON, or a truthy non-object (an
+            // unreachable-in-practice shape for this endpoint -- e.g. a bare JSON number), is
+            // left as the ORIGINAL bytes verbatim rather than fabricating IR structure that was
+            // never there. (The old code still re-stringified a truthy non-object via
+            // ensureClaudeCodeSystem's no-op passthrough + json.stringify; skipping that here is
+            // an idempotent no-op difference for realistic inputs, not a behavior change.)
+            if (parsed instanceof Map) {
+                io.github.intisy.ai.ir.spi.JsonCodec irJson = new IrJsonCodecAdapter(json);
+                AnthropicTranslator translator = new AnthropicTranslator(irJson);
+                IrRequest ir = translator.decodeRequest(bodyText);
+                streaming = ir.stream;
+                ir.system = ensureClaudeCodeSystemBlocks(ir.system);
+                bodyText = translator.encodeRequest(ir);
+            }
         }
 
         Map<String, String> headers = new LinkedHashMap<>();

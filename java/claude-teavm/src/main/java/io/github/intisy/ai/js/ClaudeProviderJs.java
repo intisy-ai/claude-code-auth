@@ -4,6 +4,9 @@ import io.github.intisy.ai.claude.AnthropicRequestTranslator;
 import io.github.intisy.ai.claude.ClaudeHandleOrchestrator;
 import io.github.intisy.ai.claude.ClaudeModelRouting;
 import io.github.intisy.ai.claude.ClaudeQuotaParser;
+import io.github.intisy.ai.claude.IrJsonCodecAdapter;
+import io.github.intisy.ai.ir.IrRequest;
+import io.github.intisy.ai.ir.translators.anthropic.AnthropicTranslator;
 import io.github.intisy.ai.shared.spi.JsonCodec;
 
 import org.teavm.jso.JSExport;
@@ -38,15 +41,20 @@ public final class ClaudeProviderJs {
     }
 
     /**
-     * Exercises {@link AnthropicRequestTranslator#ensureClaudeCodeSystem} plus the
-     * {@link JsonCodec} SPI (parse the body, inject the identity block, stringify it back).
+     * Exercises the SP-2 IR-based system-block injection under TeaVM: decodes an Anthropic
+     * request body through core-ir's {@link AnthropicTranslator}, applies
+     * {@link AnthropicRequestTranslator#ensureClaudeCodeSystemBlocks}, and re-encodes it --
+     * proving core-ir's translator (and this module's :ir dependency) is itself transpilable, not
+     * just {@code AnthropicRequestTranslator}'s own pure functions. Supersedes the old
+     * raw-JSON {@code ensureClaudeCodeSystemJson} export (its method was deleted).
      */
     @JSExport
     public static String ensureClaudeCodeSystemJson(String bodyJson) {
         JsonCodec json = new SimpleJsonCodec();
-        Object parsed = bodyJson != null ? json.parse(bodyJson) : null;
-        Object updated = AnthropicRequestTranslator.ensureClaudeCodeSystem(parsed);
-        return json.stringify(updated);
+        AnthropicTranslator translator = new AnthropicTranslator(new IrJsonCodecAdapter(json));
+        IrRequest ir = translator.decodeRequest(bodyJson);
+        ir.system = AnthropicRequestTranslator.ensureClaudeCodeSystemBlocks(ir.system);
+        return translator.encodeRequest(ir);
     }
 
     /** Exercises {@link ClaudeQuotaParser#poolLabel}. */

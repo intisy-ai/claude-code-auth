@@ -12,6 +12,11 @@ dependencies {
     // again below for the SPI types (JsonCodec) ClaudeProviderJs references directly.
     implementation project(":claude-provider")
     implementation project(":routing")
+    // :claude-provider only `compileOnly`s :ir too (same thin-jar reasoning) -- that does NOT
+    // propagate to us either, so :ir is declared again below (SP-2) so the compiled orchestrator
+    // JS bundle actually contains core-ir's IR types + AnthropicTranslator that
+    // AnthropicRequestTranslator now calls into.
+    implementation project(":ir")
     // core-proxy's own :teavm js-base (SimpleJsonCodec) -- reused rather than duplicated;
     // ClaudeProviderJs lives in the SAME package (io.github.intisy.ai.js) so it can reference
     // SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.

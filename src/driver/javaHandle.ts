@@ -7,7 +7,6 @@
 
 import { proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { manager } from "./index.js";
-import { prepareClaudeRequest } from "../plugin/request.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
 
