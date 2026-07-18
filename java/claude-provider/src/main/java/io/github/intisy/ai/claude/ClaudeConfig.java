@@ -1,9 +1,12 @@
 package io.github.intisy.ai.claude;
 
-import io.github.intisy.ai.shared.spi.http.HttpResponse;
+import io.github.intisy.ai.shared.routing.ConfigField;
+import io.github.intisy.ai.shared.routing.ConfigGroup;
+import io.github.intisy.ai.shared.routing.ConfigSchema;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +18,16 @@ import java.util.Map;
  * PUT (validate/coerce + persist) against the backend {@link io.github.intisy.ai.shared.spi.Store}
  * under the SAME key name the TS driver's settings.ts reads ({@code config/claude-code.json}),
  * so JVM and TS share one on-disk config file.
+ *
+ * <p>Exposes the typed {@link io.github.intisy.ai.shared.routing.ConfigurableProvider} shape
+ * ({@link #schema()}/{@link #values}/{@link #putValues}) that {@link ClaudeProvider} implements
+ * directly -- there is no HttpResponse/JSON wrapper here since nothing else (TeaVM export surface,
+ * TS driver) ever called the old {@code GET/PUT /v1/config} branch; those lived ONLY in {@code
+ * ClaudeProvider#handle}'s retired URL branches. {@code type} strings use the SPI/dashboard
+ * vocabulary ({@code bool}/{@code select}/{@code number}/{@code text}) exactly -- the example-server
+ * grouped-config renderer branches STRICTLY on those tokens (anything else falls through to a plain
+ * text input), so the pre-migration internal tokens {@code "boolean"}/{@code "enum"} would have made
+ * Logging render as a text box and Account-selection as a text box instead of a checkbox/dropdown.
  */
 final class ClaudeConfig {
 
@@ -24,10 +37,13 @@ final class ClaudeConfig {
     // ClaudeBackend/FileStore), so the key here is just the filename, not the "config/" prefix.
     private static final String STORE_KEY = "claude-code.json";
 
+    // type tokens use the SPI/dashboard vocabulary (bool/select/number/text) directly -- the
+    // grouped-config renderer branches STRICTLY on these, so "boolean"/"enum" would render as
+    // plain text inputs instead of a checkbox/dropdown.
     private static final List<Field> FIELDS = Arrays.asList(
-            new Field("logging", "Logging", "boolean", null, Boolean.TRUE),
+            new Field("logging", "Logging", "bool", null, Boolean.TRUE),
             new Field("max_account_attempts", "Max account attempts", "number", null, 4L),
-            new Field("account_selection_strategy", "Account selection strategy", "enum",
+            new Field("account_selection_strategy", "Account selection strategy", "select",
                     Arrays.asList("sticky", "round-robin", "hybrid"), "hybrid"),
             new Field("default_cooldown_seconds", "Default cooldown seconds", "number", null, 60L),
             new Field("max_cooldown_seconds", "Max cooldown seconds", "number", null, 900L)
@@ -36,62 +52,41 @@ final class ClaudeConfig {
     private ClaudeConfig() {
     }
 
-    static HttpResponse config(ClaudeBackend backend) {
-        Map<String, Object> persisted = readPersisted(backend);
-
-        List<Object> fields = new ArrayList<>();
+    /** {@link io.github.intisy.ai.shared.routing.ConfigurableProvider#configSchema}. */
+    static ConfigSchema schema() {
+        List<ConfigField> fields = new ArrayList<>();
         for (Field f : FIELDS) {
-            Map<String, Object> fieldJson = new LinkedHashMap<>();
-            fieldJson.put("key", f.key);
-            fieldJson.put("label", f.label);
-            fieldJson.put("type", f.type);
-            if (f.options != null) fieldJson.put("options", f.options);
-            fieldJson.put("default", f.defaultValue);
-            fields.add(fieldJson);
+            fields.add(new ConfigField(f.key, f.label, f.type, f.options, f.defaultValue));
         }
-        Map<String, Object> group = new LinkedHashMap<>();
-        group.put("title", "Claude");
-        group.put("fields", fields);
-
-        Map<String, Object> root = new LinkedHashMap<>();
-        List<Object> groups = new ArrayList<>();
-        groups.add(group);
-        root.put("groups", groups);
-        root.put("values", mergedValues(persisted));
-        return json(backend, 200, root);
+        return new ConfigSchema(Collections.singletonList(new ConfigGroup("Claude", fields)));
     }
 
-    static HttpResponse putConfig(ClaudeBackend backend, String requestBody) {
-        Object parsed;
-        try {
-            parsed = backend.json.parse(requestBody != null ? requestBody : "");
-        } catch (Exception e) {
-            return json(backend, 400, errorRoot("malformed request body"));
-        }
-        Map<String, Object> body = asMap(parsed);
-        Map<String, Object> incoming = body != null ? asMap(body.get("values")) : null;
-        if (body == null || incoming == null) {
-            return json(backend, 400, errorRoot("missing values object"));
-        }
+    /** {@link io.github.intisy.ai.shared.routing.ConfigurableProvider#getConfigValues}. */
+    static Map<String, Object> values(ClaudeBackend backend) {
+        return mergedValues(readPersisted(backend));
+    }
 
-        // Only known keys are ever written; the store keeps overrides only (not baked-in
-        // defaults), so a field never explicitly set stays absent and future default changes
-        // still take effect for it.
+    /**
+     * {@link io.github.intisy.ai.shared.routing.ConfigurableProvider#putConfigValues}: {@code
+     * incoming} is already a parsed values map (the caller owns request-body JSON parsing now --
+     * that concern moved out of this provider with the retired {@code PUT /v1/config} branch).
+     * Only known keys are ever written; the store keeps overrides only (not baked-in defaults), so
+     * a field never explicitly set stays absent and future default changes still take effect for
+     * it. An invalid/unknown value (e.g. an enum outside its options) is ignored rather than
+     * rejecting the whole call, leaving any prior override/default in place.
+     */
+    static Map<String, Object> putValues(ClaudeBackend backend, Map<String, Object> incoming) {
         Map<String, Object> persisted = readPersisted(backend);
         Map<String, Object> overrides = persisted != null ? new LinkedHashMap<>(persisted) : new LinkedHashMap<>();
-        for (Field f : FIELDS) {
-            if (!incoming.containsKey(f.key)) continue;
-            Object coerced = coerce(f, incoming.get(f.key));
-            // An invalid/unknown value (e.g. an enum outside its options) is ignored rather
-            // than rejecting the whole request, leaving any prior override/default in place.
-            if (coerced != null) overrides.put(f.key, coerced);
+        if (incoming != null) {
+            for (Field f : FIELDS) {
+                if (!incoming.containsKey(f.key)) continue;
+                Object coerced = coerce(f, incoming.get(f.key));
+                if (coerced != null) overrides.put(f.key, coerced);
+            }
         }
-
         backend.store.put(STORE_KEY, backend.json.stringify(overrides));
-
-        Map<String, Object> root = new LinkedHashMap<>();
-        root.put("values", mergedValues(overrides));
-        return json(backend, 200, root);
+        return mergedValues(overrides);
     }
 
     // --- helpers ---
@@ -113,30 +108,17 @@ final class ClaudeConfig {
 
     private static Object coerce(Field f, Object raw) {
         switch (f.type) {
-            case "boolean":
+            case "bool":
                 return raw instanceof Boolean ? raw : null;
             case "number":
                 return raw instanceof Number ? raw : null;
-            case "enum":
+            case "select":
                 return (raw instanceof String && f.options.contains(raw)) ? raw : null;
+            case "text":
+                return raw instanceof String ? raw : null;
             default:
                 return null;
         }
-    }
-
-    private static Map<String, Object> errorRoot(String message) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("error", message);
-        return m;
-    }
-
-    private static HttpResponse json(ClaudeBackend backend, int status, Object body) {
-        HttpResponse r = new HttpResponse();
-        r.status = status;
-        r.headers = new LinkedHashMap<>();
-        r.headers.put("content-type", "application/json");
-        r.body = backend.json.stringify(body);
-        return r;
     }
 
     @SuppressWarnings("unchecked")

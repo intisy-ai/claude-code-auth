@@ -1,13 +1,23 @@
 package io.github.intisy.ai.claude;
 
 import io.github.intisy.ai.shared.model.Account;
+import io.github.intisy.ai.shared.routing.AccountQuota;
+import io.github.intisy.ai.shared.routing.AuthorizeInfo;
+import io.github.intisy.ai.shared.routing.ConfigSchema;
+import io.github.intisy.ai.shared.routing.ConfigurableProvider;
 import io.github.intisy.ai.shared.routing.HandlerCtx;
+import io.github.intisy.ai.shared.routing.ModelCatalogProvider;
+import io.github.intisy.ai.shared.routing.ModelInfo;
+import io.github.intisy.ai.shared.routing.OAuthProvider;
 import io.github.intisy.ai.shared.routing.Provider;
+import io.github.intisy.ai.shared.routing.QuotaProvider;
 import io.github.intisy.ai.shared.spi.Logger;
 import io.github.intisy.ai.shared.spi.http.HttpRequest;
 import io.github.intisy.ai.shared.spi.http.HttpResponse;
 
+import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -28,8 +38,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Shape discipline: {@code compileOnly project(":routing")} + {@code compileOnly
  * "io.github.intisy:jvm:0.1.0"} keep this module's own jar THIN (no {@code :routing}/{@code
  * :jvm} classes bundled -- the host's {@code ProviderRegistry} classloader already has them).
+ *
+ * <p>Typed capability SPI (E-C): {@link #handle} now carries ONLY the messages orchestrator --
+ * the {@code GET/PUT /v1/config}, {@code GET /v1/models}, {@code GET /v1/quota}, and {@code
+ * GET/POST /v1/oauth/*} URL branches that used to live here are retired in favor of the typed
+ * {@link ConfigurableProvider}/{@link ModelCatalogProvider}/{@link QuotaProvider}/{@link
+ * OAuthProvider} methods below, each a thin delegate to the same {@link ClaudeConfig}/{@link
+ * ClaudeModelsFetch}/{@link ClaudeUsageFetch}/{@link ClaudeOAuth} classes as before (no duplicated
+ * logic). This is JVM/server-facing only -- the TeaVM JS export surface ({@code ClaudeProviderJs})
+ * never referenced this class and is untouched; the TS driver keeps its own native config/models/
+ * quota/oauth paths.
  */
-public final class ClaudeProvider implements Provider {
+public final class ClaudeProvider implements Provider, ConfigurableProvider, ModelCatalogProvider,
+        QuotaProvider, OAuthProvider {
 
     public static final String ID = "claude-code-auth";
 
@@ -43,48 +64,53 @@ public final class ClaudeProvider implements Provider {
         return ID;
     }
 
+    // ---- ConfigurableProvider -----------------------------------------------------------------
+
+    @Override
+    public ConfigSchema configSchema(HandlerCtx ctx) {
+        return ClaudeConfig.schema();
+    }
+
+    @Override
+    public Map<String, Object> getConfigValues(HandlerCtx ctx) {
+        return ClaudeConfig.values(ClaudeBackend.forCtx(ctx));
+    }
+
+    @Override
+    public Map<String, Object> putConfigValues(HandlerCtx ctx, Map<String, Object> values) {
+        return ClaudeConfig.putValues(ClaudeBackend.forCtx(ctx), values);
+    }
+
+    // ---- ModelCatalogProvider -----------------------------------------------------------------
+
+    @Override
+    public List<ModelInfo> models(HandlerCtx ctx) {
+        return ClaudeModelsFetch.models(ClaudeBackend.forCtx(ctx));
+    }
+
+    // ---- QuotaProvider ------------------------------------------------------------------------
+
+    @Override
+    public List<AccountQuota> quota(HandlerCtx ctx) {
+        return ClaudeUsageFetch.quota(ClaudeBackend.forCtx(ctx));
+    }
+
+    // ---- OAuthProvider ------------------------------------------------------------------------
+
+    @Override
+    public AuthorizeInfo authorize(HandlerCtx ctx) {
+        return ClaudeOAuth.authorizeInfo();
+    }
+
+    @Override
+    public Map<String, Object> exchange(HandlerCtx ctx, String body) {
+        return ClaudeOAuth.exchangeValues(ClaudeBackend.forCtx(ctx), body);
+    }
+
+    // ---- messages orchestrator ----------------------------------------------------------------
+
     @Override
     public HttpResponse handle(HttpRequest request, HandlerCtx ctx) {
-        // Model-map Task 1: dashboard discovery calls GET .../v1/models -- a side path that never
-        // touches the messages orchestrator below (no retry/rotation, just one ensureAccess'd
-        // upstream fetch). Checked first so the messages path stays completely untouched.
-        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
-                && request.url.endsWith("/v1/models")) {
-            return ClaudeModelsFetch.fetch(ClaudeBackend.forCtx(ctx), ctx);
-        }
-
-        // Quota-display Task 1: dashboard usage-display calls GET .../v1/quota -- same side-path
-        // discipline as the /v1/models branch above (no retry/rotation, per-account ensureAccess'd
-        // upstream fetches). Checked before the messages path so it stays completely untouched.
-        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
-                && request.url.endsWith("/v1/quota")) {
-            return ClaudeUsageFetch.fetch(ClaudeBackend.forCtx(ctx), ctx);
-        }
-
-        // Provider-authorize OAuth convention (Task 4): GET /v1/config, GET /v1/oauth/authorize,
-        // POST /v1/oauth/exchange. Same side-path discipline as /v1/models and /v1/quota above --
-        // checked before the messages orchestrator so that path stays completely untouched.
-        // ClaudeOAuth is self-contained (JVM-only crypto + its own constants); authorize() needs
-        // no backend at all, and exchange() only needs backend.http/json/clock. ClaudeConfig
-        // (real settings GET+PUT persistence -- see class doc) needs the backend Store.
-        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
-                && request.url.endsWith("/v1/config")) {
-            return ClaudeConfig.config(ClaudeBackend.forCtx(ctx));
-        }
-        if (request != null && "PUT".equalsIgnoreCase(request.method) && request.url != null
-                && request.url.endsWith("/v1/config")) {
-            return ClaudeConfig.putConfig(ClaudeBackend.forCtx(ctx), request.body);
-        }
-        if (request != null && "GET".equalsIgnoreCase(request.method) && request.url != null
-                && request.url.endsWith("/v1/oauth/authorize")) {
-            return ClaudeOAuth.authorize();
-        }
-        if (request != null && "POST".equalsIgnoreCase(request.method) && request.url != null
-                && request.url.endsWith("/v1/oauth/exchange")) {
-            ClaudeBackend oauthBackend = ClaudeBackend.forCtx(ctx);
-            return ClaudeOAuth.exchange(oauthBackend, request.body);
-        }
-
         ClaudeBackend backend = ClaudeBackend.forCtx(ctx);
         Logger log = loggerFor(ctx);
         ClaudeHandleOrchestrator orchestrator = orchestratorFor(backend);
@@ -162,9 +188,7 @@ public final class ClaudeProvider implements Provider {
         return log != null ? log : (msg -> { });
     }
 
-    // Package-private (not private) so ClaudeModelsFetch's own error paths can build the exact
-    // same {"type":"error","error":{...}} shape instead of duplicating the JSON construction.
-    static HttpResponse errorResponse(int status, String errorType, String message) {
+    private static HttpResponse errorResponse(int status, String errorType, String message) {
         HttpResponse response = new HttpResponse();
         response.status = status;
         response.headers = new LinkedHashMap<>();

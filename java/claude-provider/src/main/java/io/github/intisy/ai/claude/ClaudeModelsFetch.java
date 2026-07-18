@@ -1,11 +1,16 @@
 package io.github.intisy.ai.claude;
 
 import io.github.intisy.ai.shared.model.Account;
-import io.github.intisy.ai.shared.routing.HandlerCtx;
+import io.github.intisy.ai.shared.routing.ModelInfo;
+import io.github.intisy.ai.shared.spi.JsonCodec;
 import io.github.intisy.ai.shared.spi.http.HttpRequest;
 import io.github.intisy.ai.shared.spi.http.HttpResponse;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Model-map Task 1: {@code GET /v1/models} discovery fetch for the example-server dashboard.
@@ -15,68 +20,84 @@ import java.util.LinkedHashMap;
  *
  * <p>Deliberately uses {@link io.github.intisy.ai.shared.manager.AccountManager#ensureAccess}
  * (no rotation/lane-claim side effects), matching the TS, which never calls {@code acquire} just
- * to list models. Never throws: every failure path (no account, refresh failure, network
- * failure, non-2xx upstream, empty mapping) folds into the same synthetic error shape the
- * messages path already uses.
+ * to list models. {@link #models} never throws: every failure path (no account, refresh failure,
+ * network failure, non-2xx upstream, empty mapping) folds into an empty list -- the typed {@link
+ * io.github.intisy.ai.shared.routing.ModelCatalogProvider#models} contract has no error shape to
+ * carry a reason, unlike the retired {@code GET /v1/models} HttpResponse branch this replaces.
  */
 final class ClaudeModelsFetch {
 
-    // Distinct wording from ClaudeHandleOrchestrator.NO_ACCOUNT_MESSAGE (this is a discovery
-    // call, not a chat turn) but the same synthetic invalid_request_error/x-hub-chat-error shape.
-    private static final String NO_ACCOUNT_MESSAGE = "No enabled claude account — seed one first.";
     private static final String MODELS_PATH = "/v1/models?limit=1000";
 
     private ClaudeModelsFetch() {
     }
 
-    static HttpResponse fetch(ClaudeBackend backend, HandlerCtx ctx) {
+    /** {@link io.github.intisy.ai.shared.routing.ModelCatalogProvider#models}. */
+    static List<ModelInfo> models(ClaudeBackend backend) {
         try {
-            return doFetch(backend);
+            return doModels(backend);
         } catch (Throwable e) {
-            // Never throw out of a provider handle() path -- any unexpected failure folds into
-            // the same api_error shape an upstream failure would.
-            return ClaudeProvider.errorResponse(502, "api_error", "models fetch failed: " + e.getMessage());
+            return Collections.emptyList();
         }
     }
 
-    private static HttpResponse doFetch(ClaudeBackend backend) {
+    private static List<ModelInfo> doModels(ClaudeBackend backend) {
         Account account = firstEnabledAccount(backend);
         if (account == null) {
-            return noAccountError();
+            return Collections.emptyList();
         }
 
         String access;
         try {
             access = backend.accounts.ensureAccess(account.id);
         } catch (RuntimeException e) {
-            // Never log the token/refresh error detail -- just the fact that refresh failed.
-            return ClaudeProvider.errorResponse(502, "api_error", "token refresh failed");
+            return Collections.emptyList();
         }
         if (access == null || access.trim().isEmpty()) {
-            return ClaudeProvider.errorResponse(502, "api_error", "token refresh failed");
+            return Collections.emptyList();
         }
 
         HttpResponse resp;
         try {
             resp = backend.http.send(buildRequest(access));
         } catch (RuntimeException e) {
-            return ClaudeProvider.errorResponse(502, "api_error", "upstream models fetch failed");
+            return Collections.emptyList();
         }
 
         if (resp.status / 100 != 2) {
-            return ClaudeProvider.errorResponse(resp.status, "api_error", "/v1/models returned " + resp.status);
+            return Collections.emptyList();
         }
 
+        // fetchModelsMapping stays untouched (its JSON-string return shape is TeaVM-exported to
+        // JS via ClaudeProviderJs); re-parse its output here rather than change its signature.
         String catalog = ClaudeModelRouting.fetchModelsMapping(backend.json, resp.body);
         if (catalog == null) {
-            return ClaudeProvider.errorResponse(502, "api_error", "no claude models in upstream response");
+            return Collections.emptyList();
         }
 
-        HttpResponse out = new HttpResponse();
-        out.status = 200;
-        out.headers = new LinkedHashMap<>();
-        out.headers.put("content-type", "application/json");
-        out.body = catalog;
+        return toModelInfoList(backend.json, catalog);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<ModelInfo> toModelInfoList(JsonCodec json, String catalogJson) {
+        Object parsed = json.parse(catalogJson);
+        if (!(parsed instanceof Map)) return Collections.emptyList();
+        Object modelsObj = ((Map<String, Object>) parsed).get("models");
+        if (!(modelsObj instanceof Map)) return Collections.emptyList();
+
+        List<ModelInfo> out = new ArrayList<>();
+        for (Map.Entry<String, Object> e : ((Map<String, Object>) modelsObj).entrySet()) {
+            String id = e.getKey();
+            String name = id;
+            Object entryObj = e.getValue();
+            if (entryObj instanceof Map) {
+                Object n = ((Map<String, Object>) entryObj).get("name");
+                if (n instanceof String) name = (String) n;
+            }
+            // context/output were never part of the pre-migration wire shape (fetchModelsMapping
+            // only ever set "name") -- 0 is not a loss, just an absent upstream value.
+            out.add(new ModelInfo(id, name, 0, 0));
+        }
         return out;
     }
 
@@ -98,11 +119,5 @@ final class ClaudeModelsFetch {
             }
         }
         return null;
-    }
-
-    private static HttpResponse noAccountError() {
-        HttpResponse response = ClaudeProvider.errorResponse(400, "invalid_request_error", NO_ACCOUNT_MESSAGE);
-        response.headers.put("x-hub-chat-error", "1");
-        return response;
     }
 }

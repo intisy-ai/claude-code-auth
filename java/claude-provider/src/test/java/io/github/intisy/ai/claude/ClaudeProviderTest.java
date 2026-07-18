@@ -1,7 +1,15 @@
 package io.github.intisy.ai.claude;
 
 import io.github.intisy.ai.shared.model.Account;
+import io.github.intisy.ai.shared.routing.AccountQuota;
+import io.github.intisy.ai.shared.routing.AuthorizeInfo;
+import io.github.intisy.ai.shared.routing.ConfigSchema;
+import io.github.intisy.ai.shared.routing.ConfigurableProvider;
 import io.github.intisy.ai.shared.routing.HandlerCtx;
+import io.github.intisy.ai.shared.routing.ModelCatalogProvider;
+import io.github.intisy.ai.shared.routing.ModelInfo;
+import io.github.intisy.ai.shared.routing.OAuthProvider;
+import io.github.intisy.ai.shared.routing.QuotaProvider;
 import io.github.intisy.ai.shared.spi.HttpClient;
 import io.github.intisy.ai.shared.spi.http.HttpRequest;
 import io.github.intisy.ai.shared.spi.http.HttpResponse;
@@ -14,9 +22,11 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,6 +43,98 @@ class ClaudeProviderTest {
     @Test
     void id_isClaudeCodeAuth() {
         assertEquals("claude-code-auth", new ClaudeProvider().id());
+    }
+
+    @Test
+    void implementsAllFourTypedCapabilities() {
+        ClaudeProvider provider = new ClaudeProvider();
+        assertInstanceOf(ConfigurableProvider.class, provider);
+        assertInstanceOf(ModelCatalogProvider.class, provider);
+        assertInstanceOf(QuotaProvider.class, provider);
+        assertInstanceOf(OAuthProvider.class, provider);
+    }
+
+    @Test
+    void typedConfigCapability_delegatesToClaudeConfig(@TempDir Path configDir) {
+        ClaudeProvider provider = new ClaudeProvider();
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.configDir = configDir.toString();
+
+        ConfigSchema schema = provider.configSchema(ctx);
+        assertEquals(1, schema.groups.size());
+        assertEquals("Claude", schema.groups.get(0).title);
+
+        Map<String, Object> values = provider.getConfigValues(ctx);
+        assertEquals(Boolean.TRUE, values.get("logging"));
+
+        Map<String, Object> updated = provider.putConfigValues(ctx, Map.of("logging", Boolean.FALSE));
+        assertEquals(Boolean.FALSE, updated.get("logging"));
+    }
+
+    @Test
+    void typedModelCatalogCapability_delegatesToClaudeModelsFetch(@TempDir Path configDir) {
+        ScriptedHttpClient http = new ScriptedHttpClient()
+                .enqueueOk(200, "{\"data\":[{\"id\":\"claude-sonnet-4\",\"display_name\":\"Claude Sonnet 4\"}]}");
+        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
+
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.configDir = configDir.toString();
+
+        List<ModelInfo> models = new ClaudeProvider().models(ctx);
+        assertEquals(1, models.size());
+        assertEquals("claude-sonnet-4", models.get(0).id);
+    }
+
+    @Test
+    void typedQuotaCapability_delegatesToClaudeUsageFetch(@TempDir Path configDir) {
+        ScriptedHttpClient http = new ScriptedHttpClient()
+                .enqueueOk(200, "{\"limits\":[{\"kind\":\"session\",\"percent\":10,\"resets_at\":\"2025-07-16T12:00:00Z\"}]}");
+        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
+
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.configDir = configDir.toString();
+
+        List<AccountQuota> accounts = new ClaudeProvider().quota(ctx);
+        assertEquals(1, accounts.size());
+        assertEquals("acct-a", accounts.get(0).accountId);
+        assertEquals(1, accounts.get(0).bars.size());
+    }
+
+    @Test
+    void typedOAuthCapability_delegatesToClaudeOAuth(@TempDir Path configDir) {
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.configDir = configDir.toString();
+
+        AuthorizeInfo info = new ClaudeProvider().authorize(ctx);
+        assertEquals("paste", info.completion);
+        assertTrue(info.authorizeUrl.contains("https://claude.ai/oauth/authorize"));
+    }
+
+    @Test
+    void handle_noLongerAnswersConfigOrOAuthUrls_branchesRetired(@TempDir Path configDir) {
+        ScriptedHttpClient http = new ScriptedHttpClient()
+                .enqueueOk(200, "{\"id\":\"msg_1\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}")
+                .enqueueOk(200, "{\"id\":\"msg_2\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}");
+        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.configDir = configDir.toString();
+
+        // Every one of these used to be a dedicated URL branch in handle() -- now they all fall
+        // through to the SAME messages orchestrator passthrough (proving the branches are gone,
+        // not that the resulting behavior is sensible for these URLs).
+        HttpRequest configReq = new HttpRequest();
+        configReq.method = "GET";
+        configReq.url = "/v1/config";
+        HttpResponse configResp = new ClaudeProvider().handle(configReq, ctx);
+        assertEquals(200, configResp.status);
+        assertEquals("https://api.anthropic.com/v1/config", http.requests.get(0).url);
+
+        HttpRequest authorizeReq = new HttpRequest();
+        authorizeReq.method = "GET";
+        authorizeReq.url = "/v1/oauth/authorize";
+        HttpResponse authorizeResp = new ClaudeProvider().handle(authorizeReq, ctx);
+        assertEquals(200, authorizeResp.status);
+        assertEquals("https://api.anthropic.com/v1/oauth/authorize", http.requests.get(1).url);
     }
 
     @Test
