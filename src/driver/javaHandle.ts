@@ -10,6 +10,7 @@ import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
 import { translators } from "../../core-ir/dist/index.js";
+import { HandleIrError } from "../../core-proxy/dist/index.js";
 
 const PROVIDER_ID = "claude-code";
 const LANE = "messages"; // Claude subscription limits are account-wide (index.ts:24)
@@ -183,24 +184,19 @@ export async function handleViaJavaOrchestrator(request, ctx) {
 // url/headers): matches AnthropicRequestTranslator.pathOf's own fallback for an absent url.
 const IR_SYNTHETIC_URL = "https://loader.local/v1/messages";
 
-// Carries a non-2xx response (real upstream "surface as-is", or one of the orchestrator's own
-// SYNTHETIC error bodies: chatErrorBody/errorResponseBody) out of handleIr. Neither body is
-// guaranteed to be Anthropic MESSAGE-shaped JSON (a SYNTHETIC body in particular can be missing
-// the "type":"error" wrapper entirely, see errorResponseBody), so forcing it through
-// translators.anthropic.decodeResponse would corrupt it: the codec always injects id/content/
-// model/stop_reason keys a bare error envelope never had. handleIr throws this instead, carrying
-// the EXACT original bytes; the legacy handle() wrapper (driver/index.ts) reconstructs the
-// response VERBATIM from them, never re-encoding through the IR: byte-identical to the pre-IR
-// wire path for every non-2xx case.
-export class HandleIrWireError extends Error {
-  constructor(status, headers, body) {
-    super("claude handleIr: non-2xx response (status " + status + ")");
-    this.name = "HandleIrWireError";
-    this.status = status;
-    this.headers = headers;
-    this.body = body;
-  }
-}
+// Non-2xx responses out of handleIr (real upstream "surface as-is", or one of the orchestrator's
+// own SYNTHETIC error bodies: chatErrorBody/errorResponseBody) are carried out via core-proxy's
+// canonical HandleIrError, not returned as data. Neither body is guaranteed to be Anthropic
+// MESSAGE-shaped JSON (a SYNTHETIC body in particular can be missing the "type":"error" wrapper
+// entirely, see errorResponseBody), so forcing it through translators.anthropic.decodeResponse
+// would corrupt it: the codec always injects id/content/model/stop_reason keys a bare error
+// envelope never had. handleIr throws HandleIrError instead, carrying the EXACT original bytes;
+// the legacy handle() wrapper (driver/index.ts) reconstructs the response VERBATIM from them,
+// never re-encoding through the IR: byte-identical to the pre-IR wire path for every non-2xx
+// case. This is also the SAME typed error core-proxy's own front door (server.ts/Router.java)
+// catches to restore status fidelity on the IR path (T3c-1), so re-export it for callers that
+// only import from this module.
+export { HandleIrError };
 
 // Internal-only IrResponse.extensions key (the leading "$" makes core-ir's AnthropicTranslator
 // exclude it from the re-encoded wire JSON automatically, the same convention core-ir itself uses
@@ -217,7 +213,7 @@ const UPSTREAM_HEADERS_EXT = "$claudeUpstreamHeaders";
  * handleViaJavaOrchestrator, completely unchanged), then decodes a genuine 2xx response back to
  * the canonical IR: a streamed SSE response becomes a true-streaming IrEventStream (never
  * buffered); a non-streaming response becomes an IrResponse. Any non-2xx outcome throws
- * {@link HandleIrWireError} rather than forcing a non-message body through the IR (see its own
+ * {@link HandleIrError} rather than forcing a non-message body through the IR (see its own
  * comment above), mirroring core-proxy's own reference handleIr contract (server-ir.test.ts /
  * IrRouterTest.java), where a provider signals failure by throwing, not by returning IR.
  */
@@ -232,7 +228,7 @@ export async function handleIr(ir, ctx) {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new HandleIrWireError(response.status, Object.fromEntries(response.headers), body);
+    throw new HandleIrError({ status: response.status, headers: Object.fromEntries(response.headers), body });
   }
 
   const contentType = response.headers.get("content-type") || "";
@@ -288,7 +284,7 @@ export async function handleLegacyViaIr(request, ctx) {
     const irResult = await handleIr(ir, ctx);
     return await wireResponseFromIrResult(irResult);
   } catch (error) {
-    if (error instanceof HandleIrWireError) {
+    if (error instanceof HandleIrError) {
       return new Response(error.body, { status: error.status, headers: error.headers });
     }
     throw error;

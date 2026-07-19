@@ -10,6 +10,7 @@ import io.github.intisy.ai.shared.routing.AccountQuota;
 import io.github.intisy.ai.shared.routing.AuthorizeInfo;
 import io.github.intisy.ai.shared.routing.ConfigSchema;
 import io.github.intisy.ai.shared.routing.ConfigurableProvider;
+import io.github.intisy.ai.shared.routing.HandleIrException;
 import io.github.intisy.ai.shared.routing.HandlerCtx;
 import io.github.intisy.ai.shared.routing.ModelCatalogProvider;
 import io.github.intisy.ai.shared.routing.ModelInfo;
@@ -278,28 +279,38 @@ class ClaudeProviderTest {
     }
 
     @Test
-    void handleIr_nonTwoxxUpstream_throwsRatherThanForcingItThroughTheMessageCodec(@TempDir Path configDir) {
-        ScriptedHttpClient http = new ScriptedHttpClient()
-                .enqueueError(429, "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"exhausted\"}}");
+    void handleIr_nonTwoxxUpstream_throwsHandleIrExceptionWithRealStatusAndBody(@TempDir Path configDir) {
+        String body = "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"exhausted\"}}";
+        ScriptedHttpClient http = new ScriptedHttpClient().enqueueError(429, body);
         registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-solo"));
         HandlerCtx ctx = new HandlerCtx();
         ctx.configDir = configDir.toString();
 
-        assertThrows(Exception.class, () -> new ClaudeProvider().handleIr(sampleIrRequest(), ctx),
-                "a non-2xx upstream response is not Anthropic MESSAGE-shaped JSON and must not be "
-                        + "coerced through decodeResponse -- handleIr must throw instead");
+        // T3c-2: a non-2xx upstream response is not Anthropic MESSAGE-shaped JSON and must not be
+        // coerced through decodeResponse -- handleIr throws the canonical HandleIrException instead,
+        // carrying the real upstream status/body verbatim (so core-proxy's front door can restore
+        // status fidelity instead of collapsing to a flat 502).
+        HandleIrException thrown = assertThrows(HandleIrException.class,
+                () -> new ClaudeProvider().handleIr(sampleIrRequest(), ctx));
+        assertEquals(429, thrown.status);
+        assertEquals(body, thrown.body);
     }
 
     @Test
-    void handleIr_noAccountConfigured_throwsRatherThanForcingASyntheticErrorThroughTheMessageCodec(
+    void handleIr_noAccountConfigured_throwsHandleIrExceptionWithSyntheticStatusAndBody(
             @TempDir Path configDir) {
         registerTestBackend(configDir, new ScriptedHttpClient());
         HandlerCtx ctx = new HandlerCtx();
         ctx.configDir = configDir.toString();
 
-        assertThrows(Exception.class, () -> new ClaudeProvider().handleIr(sampleIrRequest(), ctx),
-                "a SYNTHETIC decision's body is not guaranteed to be Anthropic MESSAGE-shaped JSON "
-                        + "and must not be coerced through decodeResponse -- handleIr must throw instead");
+        // T3c-2: a SYNTHETIC decision's body (no-account/exhaustion) is not guaranteed to be
+        // Anthropic MESSAGE-shaped JSON and must not be coerced through decodeResponse -- handleIr
+        // throws the canonical HandleIrException, carrying this provider's own synthesized
+        // status/body through unchanged.
+        HandleIrException thrown = assertThrows(HandleIrException.class,
+                () -> new ClaudeProvider().handleIr(sampleIrRequest(), ctx));
+        assertTrue(thrown.status >= 400);
+        assertTrue(thrown.body != null && !thrown.body.isEmpty());
     }
 
     private static IrRequest sampleIrRequest() {

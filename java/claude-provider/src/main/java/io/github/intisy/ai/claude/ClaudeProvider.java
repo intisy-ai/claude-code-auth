@@ -8,6 +8,7 @@ import io.github.intisy.ai.shared.routing.AccountQuota;
 import io.github.intisy.ai.shared.routing.AuthorizeInfo;
 import io.github.intisy.ai.shared.routing.ConfigSchema;
 import io.github.intisy.ai.shared.routing.ConfigurableProvider;
+import io.github.intisy.ai.shared.routing.HandleIrException;
 import io.github.intisy.ai.shared.routing.HandlerCtx;
 import io.github.intisy.ai.shared.routing.ModelCatalogProvider;
 import io.github.intisy.ai.shared.routing.ModelInfo;
@@ -163,11 +164,11 @@ public final class ClaudeProvider implements Provider, ConfigurableProvider, Mod
      * as-is") are NOT guaranteed to be Anthropic MESSAGE-shaped JSON -- forcing either through the
      * message codec would corrupt it (the codec always injects {@code id}/{@code content}/
      * {@code model}/{@code stop_reason} keys that a bare error envelope never had). Both cases
-     * throw instead, matching {@link Provider#handleIr}'s own contract: a legacy-only provider's
-     * default throws {@code UnsupportedOperationException} for "no IR path"; this override throws
-     * a plain exception for "IR path exists, but this particular outcome cannot be expressed as an
-     * IR message" -- the router-side caller treats ANY thrown exception here as a hard failure
-     * (502), exactly as a {@link #handle} error would surface today.
+     * throw {@link HandleIrException} instead (T3c-2), core-proxy's canonical typed transport
+     * error, carrying the real status/headers/body: {@code Router.route} catches it and
+     * reconstructs an equivalent {@code HttpResponse}, running it through the SAME rate-limit/
+     * fallback logic a legacy {@link #handle} response would get, instead of collapsing to a flat
+     * 502 (see {@code HandleIrException}'s own javadoc).
      *
      * <p>The JVM {@link ClaudeHostSeams.HostAttemptExecutor} always fully reads the upstream body
      * into a {@code String} (no true SSE streaming on this path today -- see {@link #handle}'s own
@@ -206,19 +207,23 @@ public final class ClaudeProvider implements Provider, ConfigurableProvider, Mod
     }
 
     private static IrResponse decodeServedIrResponse(ClaudeHandleOrchestrator.HandleDecision decision,
-            AnthropicTranslator translator) {
+            AnthropicTranslator translator) throws HandleIrException {
         if (decision.kind == ClaudeHandleOrchestrator.HandleDecision.Kind.SERVE
                 && decision.attemptRef instanceof HttpResponse) {
             HttpResponse response = (HttpResponse) decision.attemptRef;
             if (response.status >= 200 && response.status < 300) {
                 return translator.decodeResponse(response.body != null ? response.body : "");
             }
-            throw new IllegalStateException(
-                    "claude handleIr: non-2xx upstream response (status " + response.status + ")");
+            // Real upstream non-2xx (rate limit, bad request, etc.) -- carry the exact
+            // status/headers/body through the canonical typed transport error (T3c-2) so
+            // core-proxy's front door (Router.route) can reconstruct it and run the SAME
+            // rate-limit/fallback logic a legacy handle() response would get.
+            throw new HandleIrException(response.status, response.headers, response.body);
         }
         if (decision.kind == ClaudeHandleOrchestrator.HandleDecision.Kind.SYNTHETIC) {
-            throw new IllegalStateException(
-                    "claude handleIr: synthetic error response (status " + decision.status + ")");
+            // The orchestrator's own synthetic error (no-account, exhaustion, etc.) -- same typed
+            // error, carrying the status/body this provider already synthesizes.
+            throw new HandleIrException(decision.status, decision.headers, decision.body);
         }
         throw new IllegalStateException("claude handleIr: unrecognized decision kind " + decision.kind);
     }

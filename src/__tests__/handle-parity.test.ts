@@ -81,7 +81,7 @@ vi.mock("../../core-auth/dist/index.js", async (importOriginal) => {
 });
 
 import { driver, manager } from "../driver/index.js";
-import { handleViaJavaOrchestrator, handleIr, HandleIrWireError } from "../driver/javaHandle.js";
+import { handleViaJavaOrchestrator, handleIr, HandleIrError } from "../driver/javaHandle.js";
 import { getMaxAttempts } from "../driver/settings.js";
 import expected from "./handle-scenarios.expected.json";
 
@@ -406,14 +406,14 @@ describe("SP-3 T2: handleIr (IR-native entry point)", () => {
     expect(result.content[0]).toMatchObject({ kind: "text", text: "hi" });
   });
 
-  it("throws HandleIrWireError (never a decoded IrResponse) for a SYNTHETIC no-account outcome", async () => {
+  it("throws HandleIrError (never a decoded IrResponse) for a SYNTHETIC no-account outcome", async () => {
     const sc = scenarios.find((s) => s.name.includes("no enabled account"));
     resetForRun(sc);
     await expect(handleIr(sampleIrRequest(), { model: "", log: () => {} }))
-      .rejects.toBeInstanceOf(HandleIrWireError);
+      .rejects.toBeInstanceOf(HandleIrError);
   });
 
-  it("throws HandleIrWireError for a real (non-synthetic) non-2xx upstream response", async () => {
+  it("throws HandleIrError for a real (non-synthetic) non-2xx upstream response", async () => {
     const sc = scenarios.find((s) => s.name.startsWith("exhaustion — all 429"));
     resetForRun(sc);
     let caught;
@@ -422,7 +422,7 @@ describe("SP-3 T2: handleIr (IR-native entry point)", () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toBeInstanceOf(HandleIrWireError);
+    expect(caught).toBeInstanceOf(HandleIrError);
     expect(caught.status).toBe(429);
   });
 
