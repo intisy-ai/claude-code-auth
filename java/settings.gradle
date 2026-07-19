@@ -19,6 +19,12 @@ project(":routing").projectDir = file("../core-proxy/java/routing")
 include ":teavm"
 project(":teavm").projectDir = file("../core-proxy/java/teavm")
 
+// :ir - core-ir's canonical IR types + vendor translators (AnthropicTranslator etc.), aliased in
+// exactly like :routing/:teavm above (SP-2). core-ir is a DIRECT submodule of claude-code-auth
+// (../core-ir from here, i.e. claude-code-auth/core-ir), not nested inside another submodule.
+include ":ir"
+project(":ir").projectDir = file("../core-ir/java/ir")
+
 // :claude-provider - AnthropicRequestTranslator + ClaudeQuotaParser (T6a). Bucket B (handle/
 // fetch/quota-refresh via HttpClient/Store) and Bucket C (login/TUI/opencode-merge) stay TS --
 // out of scope for this module, see ../.superpowers/port-grounding-map.md.

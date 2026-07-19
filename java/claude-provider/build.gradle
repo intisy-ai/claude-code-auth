@@ -9,6 +9,14 @@ dependencies {
     compileOnly project(":routing")
     testImplementation project(":routing")
 
+    // core-ir's IR types + AnthropicTranslator (SP-2): AnthropicRequestTranslator now round-trips
+    // the inbound request body through the IR instead of hand-rewriting the parsed JSON. Same
+    // "keep the shipped jar thin" discipline as :routing above -- ai-java does not host core-ir
+    // yet (that lands in SP-3), so compileOnly keeps :ir's classes out of claude-provider.jar;
+    // testImplementation re-adds it for test code.
+    compileOnly project(":ir")
+    testImplementation project(":ir")
+
     // Phase 6: ClaudeBackend self-assembles Store/HttpClient/JsonCodec/Clock/Random + a real
     // AccountManager from the JVM backends + :accounts. CI has no composite includeBuild, so the
     // MAIN compile dependency comes from the PUBLISHED ai-java release (1.0.7) via github-gradle's

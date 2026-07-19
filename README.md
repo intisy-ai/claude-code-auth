@@ -30,9 +30,8 @@ flowchart TD
 ## Structure
 
 - `src/`
-  - `driver/` — driver + OAuth config/login
+  - `driver/` — driver + OAuth config/login (request prep now round-trips through core-ir, java/claude-provider)
   - `oauth/` — PKCE flow
-  - `plugin/request.ts` — Anthropic rewrite
   - `commands.ts` — slash-commands
   - `handler.ts`/`index.ts`/`cli.ts` — entries
 - `dist/`

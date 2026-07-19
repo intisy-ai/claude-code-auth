@@ -54,7 +54,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -100,7 +100,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": "http://proxy1"
       }
     ]
@@ -170,7 +170,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": "http://proxy1"
       },
       {
@@ -182,7 +182,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -252,7 +252,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": "http://proxy1"
       },
       {
@@ -264,7 +264,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -322,7 +322,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -334,7 +334,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -392,7 +392,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -404,7 +404,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -479,7 +479,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -491,7 +491,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -503,7 +503,7 @@
           "authorization": "Bearer tok3",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -561,7 +561,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -573,7 +573,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -640,7 +640,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -652,7 +652,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -710,7 +710,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -722,7 +722,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -768,7 +768,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": "http://proxy1"
       },
       {
@@ -780,7 +780,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -832,7 +832,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -964,7 +964,7 @@
           "authorization": "Bearer tok0",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -976,7 +976,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -988,7 +988,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -1000,7 +1000,7 @@
           "authorization": "Bearer tok3",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]
@@ -1094,7 +1094,7 @@
           "authorization": "Bearer tok0",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -1106,7 +1106,7 @@
           "authorization": "Bearer tok1",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -1118,7 +1118,7 @@
           "authorization": "Bearer tok2",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       },
       {
@@ -1130,7 +1130,7 @@
           "authorization": "Bearer tok3",
           "content-type": "application/json"
         },
-        "body": "{\"model\":\"claude-sonnet-4\",\"messages\":[],\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}]}",
+        "body": "{\"model\":\"claude-sonnet-4\",\"system\":[{\"type\":\"text\",\"text\":\"You are Claude Code, Anthropic's official CLI for Claude.\"}],\"messages\":[],\"stream\":false}",
         "proxy": null
       }
     ]

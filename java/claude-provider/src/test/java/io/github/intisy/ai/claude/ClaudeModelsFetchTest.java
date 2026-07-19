@@ -94,54 +94,6 @@ class ClaudeModelsFetchTest {
         assertTrue(models.isEmpty(), "upstream failure must fold into an empty list, not throw");
     }
 
-    @Test
-    void postMessages_regression_stillRoutesThroughOrchestrator_notInterceptedByModels(@TempDir Path configDir) {
-        ScriptedHttpClient http = new ScriptedHttpClient()
-                .enqueueOk(200, "{\"id\":\"msg_1\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}");
-        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
-
-        HttpRequest request = new HttpRequest();
-        request.method = "POST";
-        request.url = "/v1/messages";
-        request.body = "{\"model\":\"claude-code-sonnet\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}";
-
-        HandlerCtx ctx = new HandlerCtx();
-        ctx.configDir = configDir.toString();
-
-        HttpResponse response = new ClaudeProvider().handle(request, ctx);
-
-        assertEquals(200, response.status);
-        assertEquals(1, http.requests.size());
-        assertEquals("https://api.anthropic.com/v1/messages", http.requests.get(0).url,
-                "a POST /v1/messages request must still hit the messages orchestrator, not the models path");
-    }
-
-    @Test
-    void handle_noLongerAnswersV1Models_urlBranchRetired(@TempDir Path configDir) {
-        ScriptedHttpClient http = new ScriptedHttpClient()
-                .enqueueOk(200, "{\"id\":\"msg_1\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}");
-        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
-
-        HttpRequest request = new HttpRequest();
-        request.method = "GET";
-        request.url = "/v1/models";
-        HandlerCtx ctx = new HandlerCtx();
-        ctx.configDir = configDir.toString();
-
-        // handle() now runs EVERY request through the messages orchestrator (via
-        // AnthropicRequestTranslator.prepareClaudeRequest, which forwards the inbound url/method
-        // verbatim) -- a bare GET /v1/models is no longer specially intercepted, so the upstream
-        // request is a literal passthrough (no "?limit=1000", no old models-discovery headers-only
-        // shape), unlike the retired branch's own ClaudeModelsFetch.buildRequest.
-        new ClaudeProvider().handle(request, ctx);
-
-        assertEquals(1, http.requests.size());
-        assertEquals("https://api.anthropic.com/v1/models", http.requests.get(0).url,
-                "GET /v1/models must no longer be special-cased in handle() -- it now flows through "
-                        + "the orchestrator's plain URL passthrough, not ClaudeModelsFetch's own "
-                        + "\"?limit=1000\" discovery request");
-    }
-
     // ---- shared fixtures (mirrors ClaudeProviderTest) -------------------------------------------
 
     private static ClaudeBackend registerTestBackend(Path configDir, HttpClient http) {

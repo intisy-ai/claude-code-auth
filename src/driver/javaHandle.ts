@@ -1,15 +1,17 @@
 // @ts-nocheck
-// The claude handle() implementation: runs the request through the TeaVM-compiled Java
+// The claude request-serving implementation: runs the request through the TeaVM-compiled Java
 // ClaudeHandleOrchestrator. Loaded lazily (dynamic import in index.ts) so the ~MB TeaVM bundle
 // only evaluates on the first request, never at plugin registration. The Java orchestrator owns
 // every decision; this shell owns only host I/O (fetch+IP-proxy transport, account acquire/report
-// over the real manager, building the final Response).
+// over the real manager, building the final Response). The provider-facing entry point is the
+// IR-native handleIr; handleViaJavaOrchestrator is its internal transport/orchestration core.
 
 import { proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { manager } from "./index.js";
-import { prepareClaudeRequest } from "../plugin/request.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
+import { translators } from "../../core-ir/dist/index.js";
+import { HandleIrError } from "../../core-proxy/dist/index.js";
 
 const PROVIDER_ID = "claude-code";
 const LANE = "messages"; // Claude subscription limits are account-wide (index.ts:24)
@@ -174,4 +176,57 @@ export async function handleViaJavaOrchestrator(request, ctx) {
 
   // SYNTHETIC — build the body here from the decision JSON (terminal/exhaustion paths).
   return new Response(decision.body, { status: decision.status, headers: decision.headers });
+}
+
+// ---- SP-3 T2: handleIr (IR-native entry point) ---------------------------------------------
+//
+// The synthetic loader-facing URL used to re-enter handleViaJavaOrchestrator from an IrRequest
+// that never had a real inbound wire Request to begin with (handleIr's contract is (ir, ctx), no
+// url/headers): matches AnthropicRequestTranslator.pathOf's own fallback for an absent url.
+const IR_SYNTHETIC_URL = "https://loader.local/v1/messages";
+
+// Non-2xx responses out of handleIr (real upstream "surface as-is", or one of the orchestrator's
+// own SYNTHETIC error bodies: chatErrorBody/errorResponseBody) are carried out via core-proxy's
+// canonical HandleIrError, not returned as data. Neither body is guaranteed to be Anthropic
+// MESSAGE-shaped JSON (a SYNTHETIC body in particular can be missing the "type":"error" wrapper
+// entirely, see errorResponseBody), so forcing it through translators.anthropic.decodeResponse
+// would corrupt it: the codec always injects id/content/model/stop_reason keys a bare error
+// envelope never had. handleIr throws HandleIrError instead, carrying the EXACT original bytes;
+// the front-door (core-proxy's server.ts/Router.java) catches this typed error and reconstructs
+// the response verbatim, restoring status fidelity on the IR path (T3c-1), so re-export it for
+// callers that only import from this module.
+export { HandleIrError };
+
+/**
+ * IR-native alternative to handleViaJavaOrchestrator (SP-3 T2): encodes the IrRequest to Anthropic
+ * wire text, runs it through the EXACT SAME transport/orchestrator flow as today (via
+ * handleViaJavaOrchestrator, completely unchanged), then decodes a genuine 2xx response back to
+ * the canonical IR: a streamed SSE response becomes a true-streaming IrEventStream (never
+ * buffered); a non-streaming response becomes an IrResponse. Any non-2xx outcome throws
+ * {@link HandleIrError} rather than forcing a non-message body through the IR (see its own
+ * comment above), mirroring core-proxy's own reference handleIr contract (server-ir.test.ts /
+ * IrRouterTest.java), where a provider signals failure by throwing, not by returning IR.
+ */
+export async function handleIr(ir, ctx) {
+  const bodyText = await translators.anthropic.encodeRequest(ir);
+  const request = new Request(IR_SYNTHETIC_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: bodyText,
+  });
+  const response = await handleViaJavaOrchestrator(request, ctx);
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new HandleIrError({ status: response.status, headers: Object.fromEntries(response.headers), body });
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("text/event-stream") && response.body) {
+    const decodeStream = await translators.anthropic.decodeStream();
+    return response.body.pipeThrough(decodeStream);
+  }
+
+  const wireText = await response.text();
+  return await translators.anthropic.decodeResponse(wireText);
 }

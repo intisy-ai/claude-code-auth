@@ -80,8 +80,7 @@ vi.mock("../../core-auth/dist/index.js", async (importOriginal) => {
   };
 });
 
-import { driver, manager } from "../driver/index.js";
-import { handleViaJavaOrchestrator } from "../driver/javaHandle.js";
+import { handleViaJavaOrchestrator, handleIr, HandleIrError } from "../driver/javaHandle.js";
 import { getMaxAttempts } from "../driver/settings.js";
 import expected from "./handle-scenarios.expected.json";
 
@@ -325,17 +324,85 @@ describe("handle regression: Java orchestrator vs frozen fixture", () => {
   }
 });
 
-describe("driver.handle delegates to the Java orchestrator", () => {
-  it("driver.handle == handleViaJavaOrchestrator for the happy path", async () => {
-    const sc = scenarios[0];
+// --- SP-3 T2: handleIr ------------------------------------------------------------------------
+
+async function collectStream(stream) {
+  const reader = stream.getReader();
+  const out = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    out.push(value);
+  }
+  return out;
+}
+
+const sampleIrRequest = (stream = false) => ({
+  model: "claude-sonnet-4",
+  messages: [{ role: "user", content: [{ kind: "text", text: "hi" }] }],
+  stream,
+});
+
+describe("SP-3 T2: handleIr (IR-native entry point)", () => {
+  it("decodes a genuine 2xx upstream message into an IrResponse", async () => {
+    const sc = {
+      accounts: [{ id: "acc1", enabled: true }],
+      acquire: [{ id: "acc1", access: "tok1" }],
+      fetch: [resp(200, { ...jsonHeaders, ...POOL_HEADERS }, JSON.stringify({
+        id: "msg_1", type: "message", role: "assistant",
+        content: [{ type: "text", text: "hi" }],
+        model: "claude-sonnet-4", stop_reason: "end_turn", stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }))],
+    };
     resetForRun(sc);
-    const direct = await snapshotResponse(await handleViaJavaOrchestrator(
-      new Request("https://loader.local/v1/messages", { method: "POST", headers: jsonHeaders, body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
-      { model: "", log: () => {} }));
+    const result = await handleIr(sampleIrRequest(), { model: "", log: () => {} });
+    expect(result.id).toBe("msg_1");
+    expect(result.stopReason).toBe("end_turn");
+    expect(result.content[0]).toMatchObject({ kind: "text", text: "hi" });
+  });
+
+  it("throws HandleIrError (never a decoded IrResponse) for a SYNTHETIC no-account outcome", async () => {
+    const sc = scenarios.find((s) => s.name.includes("no enabled account"));
     resetForRun(sc);
-    const viaDriver = await snapshotResponse(await driver.handle(
-      new Request("https://loader.local/v1/messages", { method: "POST", headers: jsonHeaders, body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
-      { model: "", log: () => {} }));
-    expect(viaDriver).toEqual(direct);
+    await expect(handleIr(sampleIrRequest(), { model: "", log: () => {} }))
+      .rejects.toBeInstanceOf(HandleIrError);
+  });
+
+  it("throws HandleIrError for a real (non-synthetic) non-2xx upstream response", async () => {
+    const sc = scenarios.find((s) => s.name.startsWith("exhaustion — all 429"));
+    resetForRun(sc);
+    let caught;
+    try {
+      await handleIr(sampleIrRequest(), { model: "", log: () => {} });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(HandleIrError);
+    expect(caught.status).toBe(429);
+  });
+
+  it("streams: a genuine 2xx SSE response becomes a true IrEventStream, never buffered", async () => {
+    const sse = [
+      'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-4","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3,"output_tokens":0}}}\n\n',
+      'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n',
+      'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
+      'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+    ].join("");
+    const sc = {
+      accounts: [{ id: "acc1", enabled: true }],
+      acquire: [{ id: "acc1", access: "tok1" }],
+      fetch: [resp(200, { "content-type": "text/event-stream" }, sse)],
+    };
+    resetForRun(sc);
+    const result = await handleIr(sampleIrRequest(true), { model: "", log: () => {} });
+    expect(result).toBeInstanceOf(ReadableStream);
+    const events = await collectStream(result);
+    expect(events.map((e) => e.event)).toEqual([
+      "message_start", "content_block_start", "text_delta", "content_block_stop", "message_delta", "message_stop",
+    ]);
+    expect(events.find((e) => e.event === "text_delta").text).toBe("hi");
   });
 });

@@ -30,9 +30,11 @@ const manager = new AccountManager(PROVIDER_ID, {
 // harness share this ONE AccountManager instance (state consistency).
 export { manager };
 
-async function handle(request, ctx) {
-  const { handleViaJavaOrchestrator } = await import("./javaHandle.js");
-  return handleViaJavaOrchestrator(request, ctx);
+// The IR-native serving path (see javaHandle.js's handleIr for the real implementation). The
+// front-door owns app<->IR translation, so the provider exposes only this, never a wire handle().
+async function handleIr(ir, ctx) {
+  const { handleIr: handleIrImpl } = await import("./javaHandle.js");
+  return handleIrImpl(ir, ctx);
 }
 
 // Live model catalog: pull the account's available models from Anthropic /v1/models
@@ -78,7 +80,7 @@ export const driver = {
   models,
   fetchModels,
   sorts: ["leaderboard"],   // opt into core's built-in quality sort (manual is automatic)
-  handle,
+  handleIr,
   login,
   loginFlow,
   accounts: createClaudeAccounts(manager),

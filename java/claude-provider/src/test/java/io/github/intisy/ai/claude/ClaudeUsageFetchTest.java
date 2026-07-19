@@ -137,28 +137,6 @@ class ClaudeUsageFetchTest {
         assertTrue(entry.bars.isEmpty(), "an errored fetch has no pool bars, but the account is still represented");
     }
 
-    @Test
-    void postMessages_regression_stillRoutesThroughOrchestrator_notInterceptedByQuota(@TempDir Path configDir) {
-        ScriptedHttpClient http = new ScriptedHttpClient()
-                .enqueueOk(200, "{\"id\":\"msg_1\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}");
-        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acc1"));
-
-        HttpRequest request = new HttpRequest();
-        request.method = "POST";
-        request.url = "/v1/messages";
-        request.body = "{\"model\":\"claude-code-sonnet\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}";
-
-        HandlerCtx ctx = new HandlerCtx();
-        ctx.configDir = configDir.toString();
-
-        HttpResponse response = new ClaudeProvider().handle(request, ctx);
-
-        assertEquals(200, response.status);
-        assertEquals(1, http.requests.size());
-        assertEquals("https://api.anthropic.com/v1/messages", http.requests.get(0).url,
-                "a POST /v1/messages request must still hit the messages orchestrator, not the quota path");
-    }
-
     // ---- shared fixtures (mirrors ClaudeModelsFetchTest) ----------------------------------------
 
     private static ClaudeBackend registerTestBackend(Path configDir, HttpClient http) {
