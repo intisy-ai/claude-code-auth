@@ -30,13 +30,8 @@ const manager = new AccountManager(PROVIDER_ID, {
 // harness share this ONE AccountManager instance (state consistency).
 export { manager };
 
-async function handle(request, ctx) {
-  const { handleLegacyViaIr } = await import("./javaHandle.js");
-  return handleLegacyViaIr(request, ctx);
-}
-
-// SP-3 T2: the IR-native alternative to handle() (see javaHandle.js's handleIr for the real
-// implementation); coexists with handle() above until a later task (T4) removes the legacy path.
+// The IR-native serving path (see javaHandle.js's handleIr for the real implementation). The
+// front-door owns app<->IR translation, so the provider exposes only this, never a wire handle().
 async function handleIr(ir, ctx) {
   const { handleIr: handleIrImpl } = await import("./javaHandle.js");
   return handleIrImpl(ir, ctx);
@@ -85,7 +80,6 @@ export const driver = {
   models,
   fetchModels,
   sorts: ["leaderboard"],   // opt into core's built-in quality sort (manual is automatic)
-  handle,
   handleIr,
   login,
   loginFlow,

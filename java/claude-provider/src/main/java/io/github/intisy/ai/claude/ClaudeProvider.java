@@ -16,46 +16,40 @@ import io.github.intisy.ai.shared.routing.OAuthProvider;
 import io.github.intisy.ai.shared.routing.Provider;
 import io.github.intisy.ai.shared.routing.QuotaProvider;
 import io.github.intisy.ai.shared.spi.Logger;
-import io.github.intisy.ai.shared.spi.http.HttpRequest;
 import io.github.intisy.ai.shared.spi.http.HttpResponse;
 
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Phase 6 of the JVM {@code ClaudeProvider} (see {@code .superpowers/sdd/phase-6-brief.md}):
- * {@link #handle} runs every request through the already-ported {@link ClaudeHandleOrchestrator}
- * -- retry/account-rotation/rate-limit backoff all come from the orchestrator's DECISION loop.
- * This class only (1) builds/memoizes one orchestrator per {@link ClaudeBackend} (Claude's
- * orchestrator ctor takes only {@code json}/{@code clock}; the two host seams are passed
- * per-call into {@code handle}, not baked into the ctor -- a structural difference from
- * antigravity's ~11-arg seam-baking ctor), (2) builds the orchestrator's {@code RequestInputs}
- * from the incoming {@code HttpRequest}/{@code HandlerCtx}, and (3) materializes the returned
- * {@code HandleDecision} into an {@code HttpResponse}.
+ * The JVM {@code ClaudeProvider}: {@link #handleIr} runs every request through the already-ported
+ * {@link ClaudeHandleOrchestrator} -- retry/account-rotation/rate-limit backoff all come from the
+ * orchestrator's DECISION loop. This class only (1) builds/memoizes one orchestrator per {@link
+ * ClaudeBackend} (Claude's orchestrator ctor takes only {@code json}/{@code clock}; the two host
+ * seams are passed per-call, not baked into the ctor -- a structural difference from antigravity's
+ * ~11-arg seam-baking ctor), (2) builds the orchestrator's {@code RequestInputs} from the inbound
+ * {@link IrRequest} (encoded to Anthropic wire text via {@link AnthropicTranslator}), and (3)
+ * decodes the served {@code HandleDecision} back to an {@link IrResponse}.
  *
- * <p>Claude is native Anthropic (no Gemini format bridge, no response transform): a {@code SERVE}
- * decision returns the retained upstream {@code HttpResponse} verbatim, and a {@code SYNTHETIC}
- * decision's body is already final Anthropic error JSON -- neither is re-wrapped here.
+ * <p>IR-native only (T4, the layering flip): the front-door (Router/proxy server) owns app&lt;-&gt;IR
+ * translation, so this provider carries ZERO app-wire format code -- the legacy {@code handle}/
+ * {@code materialize} wire passthrough is gone, and the class inherits {@link Provider}'s throwing
+ * {@code handle} default. {@link #handleIr} decodes only a genuine 2xx {@code SERVE} through the
+ * IR; every non-2xx or {@code SYNTHETIC} outcome throws {@link HandleIrException} carrying the
+ * exact upstream status/headers/body, which the front-door reconstructs.
  *
  * <p>Shape discipline: {@code compileOnly project(":routing")} + {@code compileOnly
  * "io.github.intisy:jvm:0.1.0"} keep this module's own jar THIN (no {@code :routing}/{@code
  * :jvm} classes bundled -- the host's {@code ProviderRegistry} classloader already has them).
  *
- * <p>Typed capability SPI (E-C): {@link #handle} now carries ONLY the messages orchestrator --
- * the {@code GET/PUT /v1/config}, {@code GET /v1/models}, {@code GET /v1/quota}, and {@code
- * GET/POST /v1/oauth/*} URL branches that used to live here are retired in favor of the typed
- * {@link ConfigurableProvider}/{@link ModelCatalogProvider}/{@link QuotaProvider}/{@link
- * OAuthProvider} methods below, each a thin delegate to the same {@link ClaudeConfig}/{@link
- * ClaudeModelsFetch}/{@link ClaudeUsageFetch}/{@link ClaudeOAuth} classes as before (no duplicated
- * logic). This is JVM/server-facing only -- the TeaVM JS export surface ({@code ClaudeProviderJs})
- * never referenced this class and is untouched; the TS driver keeps its own native config/models/
- * quota/oauth paths.
- *
- * <p>SP-3 T2 adds {@link #handleIr}, the IR-native alternative to {@link #handle} (see its own
- * javadoc below): purely additive, coexisting with the unchanged {@link #handle}/{@link
- * #materialize} passthrough above until a later task (T4) removes the legacy wire path.
+ * <p>Typed capability SPI (E-C): the {@code GET/PUT /v1/config}, {@code GET /v1/models}, {@code
+ * GET /v1/quota}, and {@code GET/POST /v1/oauth/*} handling lives in the typed {@link
+ * ConfigurableProvider}/{@link ModelCatalogProvider}/{@link QuotaProvider}/{@link OAuthProvider}
+ * methods below, each a thin delegate to the same {@link ClaudeConfig}/{@link ClaudeModelsFetch}/
+ * {@link ClaudeUsageFetch}/{@link ClaudeOAuth} classes as before (no duplicated logic). This is
+ * JVM/server-facing only -- the TeaVM JS export surface ({@code ClaudeProviderJs}) never referenced
+ * this class and is untouched; the TS driver keeps its own native config/models/quota/oauth paths.
  */
 public final class ClaudeProvider implements Provider, ConfigurableProvider, ModelCatalogProvider,
         QuotaProvider, OAuthProvider {
@@ -115,48 +109,14 @@ public final class ClaudeProvider implements Provider, ConfigurableProvider, Mod
         return ClaudeOAuth.exchangeValues(ClaudeBackend.forCtx(ctx), body);
     }
 
-    // ---- messages orchestrator ----------------------------------------------------------------
-
-    @Override
-    public HttpResponse handle(HttpRequest request, HandlerCtx ctx) {
-        ClaudeBackend backend = ClaudeBackend.forCtx(ctx);
-        Logger log = loggerFor(ctx);
-        ClaudeHandleOrchestrator orchestrator = orchestratorFor(backend);
-
-        ClaudeHandleOrchestrator.RequestInputs in = new ClaudeHandleOrchestrator.RequestInputs();
-        // The orchestrator computes the real api.anthropic.com URL itself inside
-        // prepareClaudeRequest; the inbound request.url is the loader-facing path/URL, passed
-        // through unchanged.
-        in.url = request != null ? request.url : null;
-        in.method = request != null ? request.method : null;
-        in.headers = request != null ? request.headers : null;
-        in.bodyText = request != null ? request.body : null;
-        in.ctxModel = ctx != null ? ctx.model : null;
-        in.topAutoCandidate = null; // no ranking leaderboard wired for the Claude lane yet
-        in.log = log;
-
-        ClaudeHandleOrchestrator.OrchestratorConfig cfg = new ClaudeHandleOrchestrator.OrchestratorConfig();
-        // Rotate through every enabled account once per request (phase-6 decision: maxAttempts =
-        // max(1, enabled account count)); cooldowns stay at the field defaults (60/900).
-        cfg.maxAttempts = Math.max(1, countEnabledAccounts(backend));
-
-        ClaudeHandleOrchestrator.AttemptExecutor exec = new ClaudeHostSeams.HostAttemptExecutor(backend);
-        ClaudeHandleOrchestrator.AccountOps accounts = new ClaudeHostSeams.HostAccountOps(backend);
-
-        try {
-            return materialize(orchestrator.handle(in, cfg, exec, accounts));
-        } catch (Throwable e) {
-            return errorResponse(502, "api_error", "claude request failed: " + e.getMessage());
-        }
-    }
-
-    // ---- SP-3 T2: IR-native alternative to handle() -------------------------------------------
+    // ---- messages orchestrator (IR-native serving path) ---------------------------------------
 
     /**
-     * IR-native alternative to {@link #handle} (SP-3 T2): encodes the inbound {@link IrRequest}
-     * to Anthropic wire text and runs it through the SAME {@link ClaudeHandleOrchestrator} flow
-     * as {@link #handle} (retry/rotation/rate-limit backoff unchanged), then decodes a genuine
-     * 2xx upstream response back to the canonical IR.
+     * The IR-native serving path (T4): encodes the inbound {@link IrRequest} to Anthropic wire
+     * text and runs it through the {@link ClaudeHandleOrchestrator} flow (retry/rotation/rate-limit
+     * backoff), then decodes a genuine 2xx upstream response back to the canonical IR. The
+     * front-door owns app&lt;-&gt;IR translation, so this provider never sees or emits the app's
+     * wire format.
      *
      * <p>Only a real 2xx {@code SERVE} is decoded through {@link AnthropicTranslator#decodeResponse}
      * -- a {@code SYNTHETIC} decision's body (see {@code ClaudeHandleOrchestrator#chatErrorBody}/
@@ -167,13 +127,13 @@ public final class ClaudeProvider implements Provider, ConfigurableProvider, Mod
      * throw {@link HandleIrException} instead (T3c-2), core-proxy's canonical typed transport
      * error, carrying the real status/headers/body: {@code Router.route} catches it and
      * reconstructs an equivalent {@code HttpResponse}, running it through the SAME rate-limit/
-     * fallback logic a legacy {@link #handle} response would get, instead of collapsing to a flat
-     * 502 (see {@code HandleIrException}'s own javadoc).
+     * fallback logic instead of collapsing to a flat 502 (see {@code HandleIrException}'s own
+     * javadoc).
      *
      * <p>The JVM {@link ClaudeHostSeams.HostAttemptExecutor} always fully reads the upstream body
-     * into a {@code String} (no true SSE streaming on this path today -- see {@link #handle}'s own
-     * javadoc and {@code ClaudeProviderTest}, which never exercises a streaming body), so this
-     * method only ever returns a buffered {@link IrResponse}, never an event stream.
+     * into a {@code String} (no true SSE streaming on this path today -- {@code ClaudeProviderTest}
+     * never exercises a streaming body), so this method only ever returns a buffered {@link
+     * IrResponse}, never an event stream.
      */
     @Override
     public IrResponse handleIr(IrRequest request, HandlerCtx ctx) throws Exception {
@@ -245,67 +205,8 @@ public final class ClaudeProvider implements Provider, ConfigurableProvider, Mod
         return count;
     }
 
-    // ---- HandleDecision materialization -- only TWO kinds ------------------------------------
-
-    private static HttpResponse materialize(ClaudeHandleOrchestrator.HandleDecision d) {
-        switch (d.kind) {
-            case SERVE:
-                // Native Anthropic passthrough: the retained upstream HttpResponse is already
-                // the final answer -- return it verbatim, no transform.
-                if (d.attemptRef instanceof HttpResponse) {
-                    return (HttpResponse) d.attemptRef;
-                }
-                return errorResponse(502, "api_error", "empty serve reference");
-            case SYNTHETIC:
-                // The orchestrator's synthetic bodies are ALREADY final Anthropic error JSON --
-                // do NOT re-wrap.
-                HttpResponse response = new HttpResponse();
-                response.status = d.status;
-                response.headers = d.headers;
-                response.body = d.body;
-                return response;
-            default:
-                return errorResponse(502, "api_error", "unrecognized claude decision: " + d.kind);
-        }
-    }
-
     private static Logger loggerFor(HandlerCtx ctx) {
         Logger log = ctx != null ? ctx.log : null;
         return log != null ? log : (msg -> { });
-    }
-
-    private static HttpResponse errorResponse(int status, String errorType, String message) {
-        HttpResponse response = new HttpResponse();
-        response.status = status;
-        response.headers = new LinkedHashMap<>();
-        response.headers.put("content-type", "application/json");
-        response.body = "{\"type\":\"error\",\"error\":{\"type\":" + quote(errorType) + ",\"message\":" + quote(message) + "}}";
-        return response;
-    }
-
-    private static String quote(String value) {
-        StringBuilder sb = new StringBuilder(value.length() + 2);
-        sb.append('"');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-                case '"': sb.append("\\\""); break;
-                case '\\': sb.append("\\\\"); break;
-                case '\n': sb.append("\\n"); break;
-                case '\r': sb.append("\\r"); break;
-                case '\t': sb.append("\\t"); break;
-                default:
-                    if (c < 0x20) {
-                        sb.append("\\u");
-                        String hex = Integer.toHexString(c);
-                        for (int pad = hex.length(); pad < 4; pad++) sb.append('0');
-                        sb.append(hex);
-                    } else {
-                        sb.append(c);
-                    }
-            }
-        }
-        sb.append('"');
-        return sb.toString();
     }
 }

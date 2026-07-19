@@ -34,16 +34,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * End-to-end test of {@link ClaudeProvider#handle}: drives the REAL provider with a scripted
+ * End-to-end test of {@link ClaudeProvider#handleIr}: drives the REAL provider with a scripted
  * {@link HttpClient} injected into the backend via {@link ClaudeBackend#forTest}/{@link
  * ClaudeBackend#registerForTest} (mirrors antigravity-auth's {@code AntigravityServePathTest}),
- * so the orchestrator's retry/rotation/synthetic-response materialization is exercised
- * end-to-end without any real network call.
+ * so the orchestrator's retry/rotation/synthetic-response behavior is exercised end-to-end
+ * without any real network call. The provider is IR-native only (T4): a 2xx serve returns an
+ * {@link IrResponse}; every non-2xx or synthetic outcome throws {@link HandleIrException}.
  */
 class ClaudeProviderTest {
 
@@ -118,69 +118,46 @@ class ClaudeProviderTest {
     }
 
     @Test
-    void handle_noLongerAnswersConfigOrOAuthUrls_branchesRetired(@TempDir Path configDir) {
+    void happyPath_stampsOAuthHeadersOnUpstreamRequest(@TempDir Path configDir) throws Exception {
         ScriptedHttpClient http = new ScriptedHttpClient()
-                .enqueueOk(200, "{\"id\":\"msg_1\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}")
-                .enqueueOk(200, "{\"id\":\"msg_2\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}");
-        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
-        HandlerCtx ctx = new HandlerCtx();
-        ctx.configDir = configDir.toString();
-
-        // Every one of these used to be a dedicated URL branch in handle() -- now they all fall
-        // through to the SAME messages orchestrator passthrough (proving the branches are gone,
-        // not that the resulting behavior is sensible for these URLs).
-        HttpRequest configReq = new HttpRequest();
-        configReq.method = "GET";
-        configReq.url = "/v1/config";
-        HttpResponse configResp = new ClaudeProvider().handle(configReq, ctx);
-        assertEquals(200, configResp.status);
-        assertEquals("https://api.anthropic.com/v1/config", http.requests.get(0).url);
-
-        HttpRequest authorizeReq = new HttpRequest();
-        authorizeReq.method = "GET";
-        authorizeReq.url = "/v1/oauth/authorize";
-        HttpResponse authorizeResp = new ClaudeProvider().handle(authorizeReq, ctx);
-        assertEquals(200, authorizeResp.status);
-        assertEquals("https://api.anthropic.com/v1/oauth/authorize", http.requests.get(1).url);
-    }
-
-    @Test
-    void happyPath_returnsUpstreamBodyVerbatimWithOAuthHeaders(@TempDir Path configDir) {
-        ScriptedHttpClient http = new ScriptedHttpClient()
-                .enqueueOk(200, "{\"id\":\"msg_1\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}");
+                .enqueueOk(200, "{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\","
+                        + "\"model\":\"claude-code-sonnet\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}],"
+                        + "\"stop_reason\":\"end_turn\",\"stop_sequence\":null,"
+                        + "\"usage\":{\"input_tokens\":3,\"output_tokens\":2}}");
 
         ClaudeBackend backend = registerTestBackend(configDir, http);
         backend.accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
 
-        // Inbound request carries an x-api-key -- prepareClaudeRequest must strip it before the
-        // outbound call, since Claude auth rides the Bearer/OAuth headers instead.
-        HttpResponse response = handle(configDir, "x-api-key", "sk-should-be-stripped");
+        IrResponse response = new ClaudeProvider().handleIr(sampleIrRequest(), ctxFor(configDir));
 
-        assertEquals(200, response.status);
-        assertEquals("{\"id\":\"msg_1\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}", response.body);
+        assertEquals("msg_1", response.id);
 
+        // The IR-native path builds bodyText from the IrRequest, then prepareClaudeRequest stamps
+        // the same Claude-Code OAuth identity on the outbound upstream request as before.
         assertEquals(1, http.requests.size());
         HttpRequest sent = http.requests.get(0);
         assertEquals("https://api.anthropic.com/v1/messages", sent.url);
         assertEquals("Bearer access-acct-a", sent.headers.get("authorization"));
         assertEquals("2023-06-01", sent.headers.get("anthropic-version"));
         assertTrue(sent.headers.get("anthropic-beta").contains("oauth-2025-04-20"));
-        assertNull(sent.headers.get("x-api-key"), "the inbound x-api-key must be stripped, not forwarded upstream");
     }
 
     @Test
-    void rateLimitRotatesToNextAccount(@TempDir Path configDir) {
+    void rateLimitRotatesToNextAccount(@TempDir Path configDir) throws Exception {
         ScriptedHttpClient http = new ScriptedHttpClient()
                 .enqueueError(429, "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}")
-                .enqueueOk(200, "{\"id\":\"msg_2\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}");
+                .enqueueOk(200, "{\"id\":\"msg_2\",\"type\":\"message\",\"role\":\"assistant\","
+                        + "\"model\":\"claude-code-sonnet\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],"
+                        + "\"stop_reason\":\"end_turn\",\"stop_sequence\":null,"
+                        + "\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}");
 
         ClaudeBackend backend = registerTestBackend(configDir, http);
         backend.accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
         backend.accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-b"));
 
-        HttpResponse response = handle(configDir);
+        IrResponse response = new ClaudeProvider().handleIr(sampleIrRequest(), ctxFor(configDir));
 
-        assertEquals(200, response.status);
+        assertEquals("msg_2", response.id);
         assertEquals(2, http.requests.size());
         String firstAuth = http.requests.get(0).headers.get("authorization");
         String secondAuth = http.requests.get(1).headers.get("authorization");
@@ -195,53 +172,54 @@ class ClaudeProviderTest {
     }
 
     @Test
-    void noAccountConfigured_returnsSyntheticInvalidRequestError(@TempDir Path configDir) {
+    void noAccountConfigured_throwsSyntheticInvalidRequestError(@TempDir Path configDir) {
         ScriptedHttpClient http = new ScriptedHttpClient();
         registerTestBackend(configDir, http);
         // No accounts seeded -> listEnabledCount() == 0.
 
-        HttpResponse response = handle(configDir);
+        HandleIrException thrown = assertThrows(HandleIrException.class,
+                () -> new ClaudeProvider().handleIr(sampleIrRequest(), ctxFor(configDir)));
 
-        assertEquals(400, response.status);
-        assertEquals("1", response.headers.get("x-hub-chat-error"));
-        assertTrue(response.body.contains("invalid_request_error"));
+        assertEquals(400, thrown.status);
+        assertEquals("1", thrown.headers.get("x-hub-chat-error"));
+        assertTrue(thrown.body.contains("invalid_request_error"));
         assertTrue(http.requests.isEmpty(), "no HTTP call should be attempted with no account");
     }
 
     @Test
-    void allAttemptsRateLimited_servesLastRealUpstreamResponseVerbatim(@TempDir Path configDir) {
+    void allAttemptsRateLimited_throwsLastRealUpstreamResponse(@TempDir Path configDir) {
         ScriptedHttpClient http = new ScriptedHttpClient()
                 .enqueueError(429, "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"exhausted\"}}");
 
         ClaudeBackend backend = registerTestBackend(configDir, http);
         backend.accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-solo")); // maxAttempts == 1
 
-        HttpResponse response = handle(configDir);
+        HandleIrException thrown = assertThrows(HandleIrException.class,
+                () -> new ClaudeProvider().handleIr(sampleIrRequest(), ctxFor(configDir)));
 
-        assertEquals(429, response.status);
-        assertTrue(response.body.contains("exhausted"));
+        assertEquals(429, thrown.status);
+        assertTrue(thrown.body.contains("exhausted"));
         assertEquals(1, http.requests.size());
     }
 
     @Test
-    void servesFromInjectedStore_notFileStore() {
+    void servesFromInjectedStore_notFileStore() throws Exception {
         MapStore store = new MapStore();
         ScriptedHttpClient http = new ScriptedHttpClient()
-                .enqueueOk(200, "{\"id\":\"msg_s\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}");
+                .enqueueOk(200, "{\"id\":\"msg_s\",\"type\":\"message\",\"role\":\"assistant\","
+                        + "\"model\":\"claude-code-sonnet\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}],"
+                        + "\"stop_reason\":\"end_turn\",\"stop_sequence\":null,"
+                        + "\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}");
         ClaudeBackend backend = ClaudeBackend.forTest(store, http);
         ClaudeBackend.registerForTest(store, backend);
         backend.accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-s"));
 
-        HttpRequest request = new HttpRequest();
-        request.method = "POST";
-        request.url = "/v1/messages";
-        request.body = "{\"model\":\"claude-code-sonnet\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}";
         HandlerCtx ctx = new HandlerCtx();
         ctx.store = store; // NO configDir -- must serve from the injected store, not FileStore
 
-        HttpResponse response = new ClaudeProvider().handle(request, ctx);
+        IrResponse response = new ClaudeProvider().handleIr(sampleIrRequest(), ctx);
 
-        assertEquals(200, response.status, response.body);
+        assertEquals("msg_s", response.id);
         assertEquals(1, http.requests.size());
         // the seeded account must live in the INJECTED store (single source of truth)
         boolean inStore = false;
@@ -371,28 +349,11 @@ class ClaudeProviderTest {
         return false;
     }
 
-    private static HttpResponse handle(Path configDir) {
-        return handle(configDir, (String[]) null);
-    }
-
-    /** {@code headerKv} is optional alternating key/value pairs set as the inbound request's headers. */
-    private static HttpResponse handle(Path configDir, String... headerKv) {
-        HttpRequest request = new HttpRequest();
-        request.method = "POST";
-        request.url = "/v1/messages";
-        request.body = "{\"model\":\"claude-code-sonnet\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}";
-        if (headerKv != null) {
-            request.headers = new LinkedHashMap<>();
-            for (int i = 0; i < headerKv.length; i += 2) {
-                request.headers.put(headerKv[i], headerKv[i + 1]);
-            }
-        }
-
+    private static HandlerCtx ctxFor(Path configDir) {
         HandlerCtx ctx = new HandlerCtx();
         ctx.configDir = configDir.toString();
         ctx.model = null;
-
-        return new ClaudeProvider().handle(request, ctx);
+        return ctx;
     }
 
     /** Scripted {@link HttpClient}: pops one queued response per {@link #send}, records every request. */

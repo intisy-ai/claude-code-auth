@@ -80,7 +80,6 @@ vi.mock("../../core-auth/dist/index.js", async (importOriginal) => {
   };
 });
 
-import { driver, manager } from "../driver/index.js";
 import { handleViaJavaOrchestrator, handleIr, HandleIrError } from "../driver/javaHandle.js";
 import { getMaxAttempts } from "../driver/settings.js";
 import expected from "./handle-scenarios.expected.json";
@@ -325,48 +324,6 @@ describe("handle regression: Java orchestrator vs frozen fixture", () => {
   }
 });
 
-describe("driver.handle delegates to the Java orchestrator", () => {
-  // SP-2 baseline: for a scenario whose upstream body is NOT Anthropic message-shaped (the
-  // shared `scenarios[0]` fixture's mock body is just '{"ok":true}', a passthrough-only stand-in
-  // predating the IR), driver.handle and handleViaJavaOrchestrator still produced byte-identical
-  // Responses, because handle() was a pure verbatim passthrough with no IR involved.
-  //
-  // SP-3 T2: driver.handle is now a thin wrapper over handleIr, which decodes a genuine 2xx
-  // response through translators.anthropic.decodeResponse: a body that is not real Anthropic
-  // MESSAGE-shaped JSON (like the '{"ok":true}' stand-in) round-trips into a DIFFERENT (but
-  // still valid) message shape, since the codec always fills in the id/type/role/content/model/
-  // stop_reason/stop_sequence fields a real message response always carries. That is a genuine,
-  // by-design consequence of routing 2xx responses through the canonical IR, not a bug, so this
-  // scenario is updated to use a REALISTIC Anthropic message body, for which the round trip is
-  // proven lossless by core-ir's own golden-vector tests (AnthropicResponseRoundTripTest). Status
-  // and headers must still match exactly (handleIr stashes the original upstream headers via the
-  // $claudeUpstreamHeaders extension precisely so this stays true); the body is compared by
-  // decoded JSON content rather than raw string, since the IR round trip may reorder keys
-  // (never wire-significant: Anthropic does not care about JSON key order).
-  it("driver.handle mirrors handleViaJavaOrchestrator's status/headers, and decodes to the same content, for the happy path", async () => {
-    const realisticBody = JSON.stringify({
-      id: "msg_1", type: "message", role: "assistant",
-      content: [{ type: "text", text: "ok" }],
-      model: "claude-sonnet-4", stop_reason: "end_turn", stop_sequence: null,
-      usage: { input_tokens: 1, output_tokens: 1 },
-    });
-    const sc = { ...scenarios[0], fetch: [resp(200, { ...jsonHeaders, ...POOL_HEADERS }, realisticBody)] };
-
-    resetForRun(sc);
-    const direct = await snapshotResponse(await handleViaJavaOrchestrator(
-      new Request("https://loader.local/v1/messages", { method: "POST", headers: jsonHeaders, body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
-      { model: "", log: () => {} }));
-    resetForRun(sc);
-    const viaDriver = await snapshotResponse(await driver.handle(
-      new Request("https://loader.local/v1/messages", { method: "POST", headers: jsonHeaders, body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
-      { model: "", log: () => {} }));
-
-    expect(viaDriver.status).toBe(direct.status);
-    expect(viaDriver.headers).toEqual(direct.headers);
-    expect(JSON.parse(viaDriver.body)).toEqual(JSON.parse(direct.body));
-  });
-});
-
 // --- SP-3 T2: handleIr ------------------------------------------------------------------------
 
 async function collectStream(stream) {
@@ -380,7 +337,6 @@ async function collectStream(stream) {
   return out;
 }
 
-const IR_URL = "https://loader.local/v1/messages";
 const sampleIrRequest = (stream = false) => ({
   model: "claude-sonnet-4",
   messages: [{ role: "user", content: [{ kind: "text", text: "hi" }] }],
@@ -426,19 +382,6 @@ describe("SP-3 T2: handleIr (IR-native entry point)", () => {
     expect(caught.status).toBe(429);
   });
 
-  it("driver.handle reproduces the SYNTHETIC no-account response byte-for-byte via the throw+reconstruct path", async () => {
-    const sc = scenarios.find((s) => s.name.includes("no enabled account"));
-    resetForRun(sc);
-    const direct = await snapshotResponse(await handleViaJavaOrchestrator(
-      new Request(IR_URL, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
-      { model: "", log: () => {} }));
-    resetForRun(sc);
-    const viaDriver = await snapshotResponse(await driver.handle(
-      new Request(IR_URL, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ model: "claude-sonnet-4", messages: [] }) }),
-      { model: "", log: () => {} }));
-    expect(viaDriver).toEqual(direct);
-  });
-
   it("streams: a genuine 2xx SSE response becomes a true IrEventStream, never buffered", async () => {
     const sse = [
       'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-4","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3,"output_tokens":0}}}\n\n',
@@ -461,35 +404,5 @@ describe("SP-3 T2: handleIr (IR-native entry point)", () => {
       "message_start", "content_block_start", "text_delta", "content_block_stop", "message_delta", "message_stop",
     ]);
     expect(events.find((e) => e.event === "text_delta").text).toBe("hi");
-  });
-
-  it("streams: driver.handle re-encodes the IrEventStream to real Anthropic SSE wire text", async () => {
-    const sse = [
-      'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-4","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3,"output_tokens":0}}}\n\n',
-      'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
-      'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n',
-      'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
-      'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}\n\n',
-      'event: message_stop\ndata: {"type":"message_stop"}\n\n',
-    ].join("");
-    const sc = {
-      accounts: [{ id: "acc1", enabled: true }],
-      acquire: [{ id: "acc1", access: "tok1" }],
-      fetch: [resp(200, { "content-type": "text/event-stream" }, sse)],
-    };
-    resetForRun(sc);
-    const wireResponse = await driver.handle(
-      new Request(IR_URL, {
-        method: "POST", headers: jsonHeaders,
-        body: JSON.stringify({ model: "claude-sonnet-4", messages: [{ role: "user", content: "hi" }], stream: true }),
-      }),
-      { model: "", log: () => {} },
-    );
-    expect(wireResponse.headers.get("content-type")).toBe("text/event-stream");
-    const text = await wireResponse.text();
-    expect(text).toContain("event: message_start");
-    expect(text).toContain("event: content_block_delta");
-    expect(text).toContain("hi");
-    expect(text).toContain("event: message_stop");
   });
 });

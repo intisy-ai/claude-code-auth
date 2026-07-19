@@ -1,9 +1,10 @@
 // @ts-nocheck
-// The claude handle() implementation: runs the request through the TeaVM-compiled Java
+// The claude request-serving implementation: runs the request through the TeaVM-compiled Java
 // ClaudeHandleOrchestrator. Loaded lazily (dynamic import in index.ts) so the ~MB TeaVM bundle
 // only evaluates on the first request, never at plugin registration. The Java orchestrator owns
 // every decision; this shell owns only host I/O (fetch+IP-proxy transport, account acquire/report
-// over the real manager, building the final Response).
+// over the real manager, building the final Response). The provider-facing entry point is the
+// IR-native handleIr; handleViaJavaOrchestrator is its internal transport/orchestration core.
 
 import { proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { manager } from "./index.js";
@@ -191,21 +192,10 @@ const IR_SYNTHETIC_URL = "https://loader.local/v1/messages";
 // entirely, see errorResponseBody), so forcing it through translators.anthropic.decodeResponse
 // would corrupt it: the codec always injects id/content/model/stop_reason keys a bare error
 // envelope never had. handleIr throws HandleIrError instead, carrying the EXACT original bytes;
-// the legacy handle() wrapper (driver/index.ts) reconstructs the response VERBATIM from them,
-// never re-encoding through the IR: byte-identical to the pre-IR wire path for every non-2xx
-// case. This is also the SAME typed error core-proxy's own front door (server.ts/Router.java)
-// catches to restore status fidelity on the IR path (T3c-1), so re-export it for callers that
-// only import from this module.
+// the front-door (core-proxy's server.ts/Router.java) catches this typed error and reconstructs
+// the response verbatim, restoring status fidelity on the IR path (T3c-1), so re-export it for
+// callers that only import from this module.
 export { HandleIrError };
-
-// Internal-only IrResponse.extensions key (the leading "$" makes core-ir's AnthropicTranslator
-// exclude it from the re-encoded wire JSON automatically, the same convention core-ir itself uses
-// for $stopReasonRaw etc.): carries the ORIGINAL upstream response headers (rate-limit headers
-// etc.) across the IR boundary so the legacy handle() wrapper can reproduce them verbatim, even
-// though IrResponse itself has no header field (the generic SP-3 contract deliberately doesn't
-// carry raw HTTP headers, see core-proxy's server.ts encodeIrResult, which always synthesizes a
-// plain content-type header for a generic IR-native caller).
-const UPSTREAM_HEADERS_EXT = "$claudeUpstreamHeaders";
 
 /**
  * IR-native alternative to handleViaJavaOrchestrator (SP-3 T2): encodes the IrRequest to Anthropic
@@ -238,55 +228,5 @@ export async function handleIr(ir, ctx) {
   }
 
   const wireText = await response.text();
-  const irResponse = await translators.anthropic.decodeResponse(wireText);
-  irResponse.extensions = irResponse.extensions || {};
-  irResponse.extensions[UPSTREAM_HEADERS_EXT] = Object.fromEntries(response.headers);
-  return irResponse;
-}
-
-// Encodes a handleIr result (IrResponse | IrEventStream) back to an Anthropic wire Response.
-async function wireResponseFromIrResult(irResult) {
-  if (irResult instanceof ReadableStream) {
-    const encodeStream = await translators.anthropic.encodeStream();
-    const sse = irResult.pipeThrough(encodeStream).pipeThrough(new TextEncoderStream());
-    return new Response(sse, {
-      status: 200,
-      headers: { "content-type": "text/event-stream", "cache-control": "no-cache", "connection": "keep-alive" },
-    });
-  }
-  const headers = (irResult.extensions && irResult.extensions[UPSTREAM_HEADERS_EXT])
-    || { "content-type": "application/json" };
-  const wireJson = await translators.anthropic.encodeResponse(irResult);
-  return new Response(wireJson, { status: 200, headers });
-}
-
-/**
- * The legacy handle() entry point (driver/index.ts), rebuilt as a thin wrapper over handleIr:
- * decode the inbound wire body to an IrRequest, run handleIr, encode its result back to the wire.
- * A body that fails to decode through the IR falls back to the raw wire path unchanged (the SAME
- * malformed-body tolerance handleViaJavaOrchestrator/the orchestrator's own JSON.parse try/catch
- * already had) rather than failing the request over a translation-layer limitation.
- */
-export async function handleLegacyViaIr(request, ctx) {
-  const log = (ctx && ctx.log) || (() => {});
-  let bodyText;
-  try { bodyText = await request.clone().text(); } catch { bodyText = ""; }
-
-  let ir;
-  try {
-    ir = await translators.anthropic.decodeRequest(bodyText || "{}");
-  } catch (error) {
-    log("IR decode failed, falling back to the raw wire path: " + error);
-    return handleViaJavaOrchestrator(request, ctx);
-  }
-
-  try {
-    const irResult = await handleIr(ir, ctx);
-    return await wireResponseFromIrResult(irResult);
-  } catch (error) {
-    if (error instanceof HandleIrError) {
-      return new Response(error.body, { status: error.status, headers: error.headers });
-    }
-    throw error;
-  }
+  return await translators.anthropic.decodeResponse(wireText);
 }
