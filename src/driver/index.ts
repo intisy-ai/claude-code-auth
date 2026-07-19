@@ -31,8 +31,15 @@ const manager = new AccountManager(PROVIDER_ID, {
 export { manager };
 
 async function handle(request, ctx) {
-  const { handleViaJavaOrchestrator } = await import("./javaHandle.js");
-  return handleViaJavaOrchestrator(request, ctx);
+  const { handleLegacyViaIr } = await import("./javaHandle.js");
+  return handleLegacyViaIr(request, ctx);
+}
+
+// SP-3 T2: the IR-native alternative to handle() (see javaHandle.js's handleIr for the real
+// implementation); coexists with handle() above until a later task (T4) removes the legacy path.
+async function handleIr(ir, ctx) {
+  const { handleIr: handleIrImpl } = await import("./javaHandle.js");
+  return handleIrImpl(ir, ctx);
 }
 
 // Live model catalog: pull the account's available models from Anthropic /v1/models
@@ -79,6 +86,7 @@ export const driver = {
   fetchModels,
   sorts: ["leaderboard"],   // opt into core's built-in quality sort (manual is automatic)
   handle,
+  handleIr,
   login,
   loginFlow,
   accounts: createClaudeAccounts(manager),

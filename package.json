@@ -41,7 +41,7 @@
     ]
   },
   "scripts": {
-    "build": "node core/teavm-build.mjs --java-dir java --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && npx tsc --project core-auth/tsconfig.json && node build.mjs",
+    "build": "npm --prefix core-ir install && npm --prefix core-ir run build && node core/teavm-build.mjs --java-dir java --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && npx tsc --project core-auth/tsconfig.json && node build.mjs",
     "postbuild": "node dist/index.js readme",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && vitest run",

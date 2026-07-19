@@ -1,5 +1,8 @@
 package io.github.intisy.ai.claude;
 
+import io.github.intisy.ai.ir.IrRequest;
+import io.github.intisy.ai.ir.IrResponse;
+import io.github.intisy.ai.ir.translators.anthropic.AnthropicTranslator;
 import io.github.intisy.ai.shared.model.Account;
 import io.github.intisy.ai.shared.routing.AccountQuota;
 import io.github.intisy.ai.shared.routing.AuthorizeInfo;
@@ -48,6 +51,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * logic). This is JVM/server-facing only -- the TeaVM JS export surface ({@code ClaudeProviderJs})
  * never referenced this class and is untouched; the TS driver keeps its own native config/models/
  * quota/oauth paths.
+ *
+ * <p>SP-3 T2 adds {@link #handleIr}, the IR-native alternative to {@link #handle} (see its own
+ * javadoc below): purely additive, coexisting with the unchanged {@link #handle}/{@link
+ * #materialize} passthrough above until a later task (T4) removes the legacy wire path.
  */
 public final class ClaudeProvider implements Provider, ConfigurableProvider, ModelCatalogProvider,
         QuotaProvider, OAuthProvider {
@@ -140,6 +147,80 @@ public final class ClaudeProvider implements Provider, ConfigurableProvider, Mod
         } catch (Throwable e) {
             return errorResponse(502, "api_error", "claude request failed: " + e.getMessage());
         }
+    }
+
+    // ---- SP-3 T2: IR-native alternative to handle() -------------------------------------------
+
+    /**
+     * IR-native alternative to {@link #handle} (SP-3 T2): encodes the inbound {@link IrRequest}
+     * to Anthropic wire text and runs it through the SAME {@link ClaudeHandleOrchestrator} flow
+     * as {@link #handle} (retry/rotation/rate-limit backoff unchanged), then decodes a genuine
+     * 2xx upstream response back to the canonical IR.
+     *
+     * <p>Only a real 2xx {@code SERVE} is decoded through {@link AnthropicTranslator#decodeResponse}
+     * -- a {@code SYNTHETIC} decision's body (see {@code ClaudeHandleOrchestrator#chatErrorBody}/
+     * {@code #errorResponseBody}) and a non-2xx {@code SERVE} (a genuine upstream error, "surface
+     * as-is") are NOT guaranteed to be Anthropic MESSAGE-shaped JSON -- forcing either through the
+     * message codec would corrupt it (the codec always injects {@code id}/{@code content}/
+     * {@code model}/{@code stop_reason} keys that a bare error envelope never had). Both cases
+     * throw instead, matching {@link Provider#handleIr}'s own contract: a legacy-only provider's
+     * default throws {@code UnsupportedOperationException} for "no IR path"; this override throws
+     * a plain exception for "IR path exists, but this particular outcome cannot be expressed as an
+     * IR message" -- the router-side caller treats ANY thrown exception here as a hard failure
+     * (502), exactly as a {@link #handle} error would surface today.
+     *
+     * <p>The JVM {@link ClaudeHostSeams.HostAttemptExecutor} always fully reads the upstream body
+     * into a {@code String} (no true SSE streaming on this path today -- see {@link #handle}'s own
+     * javadoc and {@code ClaudeProviderTest}, which never exercises a streaming body), so this
+     * method only ever returns a buffered {@link IrResponse}, never an event stream.
+     */
+    @Override
+    public IrResponse handleIr(IrRequest request, HandlerCtx ctx) throws Exception {
+        ClaudeBackend backend = ClaudeBackend.forCtx(ctx);
+        Logger log = loggerFor(ctx);
+        ClaudeHandleOrchestrator orchestrator = orchestratorFor(backend);
+
+        AnthropicTranslator translator = new AnthropicTranslator(new IrJsonCodecAdapter(backend.json));
+        String bodyText = translator.encodeRequest(request);
+
+        ClaudeHandleOrchestrator.RequestInputs in = new ClaudeHandleOrchestrator.RequestInputs();
+        // No wire request exists on this entry point (the caller already decoded one into `request`
+        // before calling handleIr) -- url/method/headers default exactly like an absent inbound
+        // request would (prepareClaudeRequest falls back to POST /v1/messages with no extra headers).
+        in.url = null;
+        in.method = null;
+        in.headers = null;
+        in.bodyText = bodyText;
+        in.ctxModel = ctx != null ? ctx.model : null;
+        in.topAutoCandidate = null;
+        in.log = log;
+
+        ClaudeHandleOrchestrator.OrchestratorConfig cfg = new ClaudeHandleOrchestrator.OrchestratorConfig();
+        cfg.maxAttempts = Math.max(1, countEnabledAccounts(backend));
+
+        ClaudeHandleOrchestrator.AttemptExecutor exec = new ClaudeHostSeams.HostAttemptExecutor(backend);
+        ClaudeHandleOrchestrator.AccountOps accounts = new ClaudeHostSeams.HostAccountOps(backend);
+
+        ClaudeHandleOrchestrator.HandleDecision decision = orchestrator.handle(in, cfg, exec, accounts);
+        return decodeServedIrResponse(decision, translator);
+    }
+
+    private static IrResponse decodeServedIrResponse(ClaudeHandleOrchestrator.HandleDecision decision,
+            AnthropicTranslator translator) {
+        if (decision.kind == ClaudeHandleOrchestrator.HandleDecision.Kind.SERVE
+                && decision.attemptRef instanceof HttpResponse) {
+            HttpResponse response = (HttpResponse) decision.attemptRef;
+            if (response.status >= 200 && response.status < 300) {
+                return translator.decodeResponse(response.body != null ? response.body : "");
+            }
+            throw new IllegalStateException(
+                    "claude handleIr: non-2xx upstream response (status " + response.status + ")");
+        }
+        if (decision.kind == ClaudeHandleOrchestrator.HandleDecision.Kind.SYNTHETIC) {
+            throw new IllegalStateException(
+                    "claude handleIr: synthetic error response (status " + decision.status + ")");
+        }
+        throw new IllegalStateException("claude handleIr: unrecognized decision kind " + decision.kind);
     }
 
     private static ClaudeHandleOrchestrator orchestratorFor(ClaudeBackend backend) {

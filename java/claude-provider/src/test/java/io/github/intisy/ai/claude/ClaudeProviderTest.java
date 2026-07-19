@@ -1,5 +1,10 @@
 package io.github.intisy.ai.claude;
 
+import io.github.intisy.ai.ir.Block;
+import io.github.intisy.ai.ir.IrMessage;
+import io.github.intisy.ai.ir.IrRequest;
+import io.github.intisy.ai.ir.IrResponse;
+import io.github.intisy.ai.ir.TextBlock;
 import io.github.intisy.ai.shared.model.Account;
 import io.github.intisy.ai.shared.routing.AccountQuota;
 import io.github.intisy.ai.shared.routing.AuthorizeInfo;
@@ -29,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -243,6 +249,69 @@ class ClaudeProviderTest {
             if (v != null && v.contains("acct-s")) { inStore = true; break; }
         }
         assertTrue(inStore, "the account must live in the injected store, proving the provider used it");
+    }
+
+    // ---- SP-3 T2: handleIr ---------------------------------------------------------------------
+
+    @Test
+    void handleIr_happyPath_decodesUpstreamMessageIntoIrResponse(@TempDir Path configDir) throws Exception {
+        ScriptedHttpClient http = new ScriptedHttpClient()
+                .enqueueOk(200, "{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\","
+                        + "\"model\":\"claude-code-sonnet\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}],"
+                        + "\"stop_reason\":\"end_turn\",\"stop_sequence\":null,"
+                        + "\"usage\":{\"input_tokens\":3,\"output_tokens\":2}}");
+        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-a"));
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.configDir = configDir.toString();
+
+        IrResponse response = new ClaudeProvider().handleIr(sampleIrRequest(), ctx);
+
+        assertEquals("msg_1", response.id);
+        assertEquals("end_turn", response.stopReason);
+        assertEquals(1, response.content.size());
+        assertTrue(response.content.get(0) instanceof TextBlock);
+        assertEquals("hi", ((TextBlock) response.content.get(0)).text);
+        assertEquals(1, http.requests.size());
+        // The IR-native path builds its own bodyText from the IrRequest -- prepareClaudeRequest
+        // still stamps the Claude-Code identity system block and OAuth headers, exactly as handle().
+        assertTrue(http.requests.get(0).headers.get("authorization").startsWith("Bearer "));
+    }
+
+    @Test
+    void handleIr_nonTwoxxUpstream_throwsRatherThanForcingItThroughTheMessageCodec(@TempDir Path configDir) {
+        ScriptedHttpClient http = new ScriptedHttpClient()
+                .enqueueError(429, "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"exhausted\"}}");
+        registerTestBackend(configDir, http).accountStore.add(ClaudeBackend.PROVIDER_ID, seededAccount("acct-solo"));
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.configDir = configDir.toString();
+
+        assertThrows(Exception.class, () -> new ClaudeProvider().handleIr(sampleIrRequest(), ctx),
+                "a non-2xx upstream response is not Anthropic MESSAGE-shaped JSON and must not be "
+                        + "coerced through decodeResponse -- handleIr must throw instead");
+    }
+
+    @Test
+    void handleIr_noAccountConfigured_throwsRatherThanForcingASyntheticErrorThroughTheMessageCodec(
+            @TempDir Path configDir) {
+        registerTestBackend(configDir, new ScriptedHttpClient());
+        HandlerCtx ctx = new HandlerCtx();
+        ctx.configDir = configDir.toString();
+
+        assertThrows(Exception.class, () -> new ClaudeProvider().handleIr(sampleIrRequest(), ctx),
+                "a SYNTHETIC decision's body is not guaranteed to be Anthropic MESSAGE-shaped JSON "
+                        + "and must not be coerced through decodeResponse -- handleIr must throw instead");
+    }
+
+    private static IrRequest sampleIrRequest() {
+        IrRequest ir = new IrRequest();
+        ir.model = "claude-code-sonnet";
+        ir.stream = false;
+        List<Block> content = new ArrayList<>();
+        content.add(new TextBlock("hi"));
+        List<IrMessage> messages = new ArrayList<>();
+        messages.add(new IrMessage("user", content));
+        ir.messages = messages;
+        return ir;
     }
 
     /** Minimal in-memory {@link io.github.intisy.ai.shared.spi.Store} test double (6-method SPI). */
