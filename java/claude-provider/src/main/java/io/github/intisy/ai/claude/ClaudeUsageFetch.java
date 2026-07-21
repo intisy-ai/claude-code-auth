@@ -15,9 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code GET /v1/quota} per-account usage fetch for the example-server dashboard. Java port of
- * the HOST-I/O half of claude-code-auth's TS {@code fetchUsagePools} (see {@code
- * src/driver/accounts-controller.ts}); the bucketing/labeling half is implemented as
+ * {@code GET /v1/quota} per-account usage fetch for the example-server dashboard. Performs the
+ * host-I/O; the bucketing/labeling half is implemented as
  * {@link ClaudeQuotaParser}, which this class feeds with the raw upstream limits.
  *
  * <p>Unlike {@link ClaudeModelsFetch} (single first-enabled-account discovery), this fetches usage

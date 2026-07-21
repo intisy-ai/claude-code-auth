@@ -20,11 +20,11 @@ defineConfig("claude-code", {
 
 defineReadme({
   description:
-    "A [core-auth](https://github.com/intisy-ai/core-auth) provider that signs in to Claude with the real Claude Code OAuth flow and lets you add **multiple Claude subscription accounts**. Both Claude Code (via the loader proxy) and OpenCode route requests through it, rotating accounts and respecting each one's subscription rate limits — so OpenCode uses your Claude Code subscription instead of a pay-per-token API key.",
+    "A [core-auth](https://github.com/intisy-ai/core-auth) provider that signs in to Claude with the real Claude Code OAuth flow and lets you add **multiple Claude subscription accounts**. Both Claude Code (via the loader proxy) and OpenCode route requests through it, rotating accounts and respecting each one's subscription rate limits, so OpenCode uses your Claude Code subscription instead of a pay-per-token API key.",
   architecture: `flowchart TD
-    subgraph Driver [claude-code driver — thin layer on core-auth]
-        HANDLE["handle(request) — Anthropic request rewrite"]
-        LOGIN["loginFlow() — PKCE OAuth"]
+    subgraph Driver [claude-code driver, thin layer on core-auth]
+        HANDLE["handle(request), Anthropic request rewrite"]
+        LOGIN["loginFlow(), PKCE OAuth"]
     end
     subgraph Core [core-auth]
         MGR[AccountManager: select / refresh / rotate]
@@ -39,15 +39,15 @@ defineReadme({
     LOGIN -->|platform.claude.com OAuth| STORE`,
   structure: {
     src: [
-      "`driver/` — driver + OAuth config/login (request prep now round-trips through core-ir, java/claude-provider)",
-      "`oauth/` — PKCE flow",
-      "`commands.ts` — slash-commands",
-      "`handler.ts`/`index.ts`/`cli.ts` — entries",
+      "`driver/`, driver + OAuth config/login (request prep now round-trips through core-ir, java/claude-provider)",
+      "`oauth/`, PKCE flow",
+      "`commands.ts`, slash-commands",
+      "`handler.ts`/`index.ts`/`cli.ts`, entries",
     ],
     dist: [
-      "`index.js` — OpenCode bundle",
-      "`handler.js` — Claude loader bundle",
-      "`cli.js` — CLI bundle",
+      "`index.js`, OpenCode bundle",
+      "`handler.js`, Claude loader bundle",
+      "`cli.js`, CLI bundle",
     ],
   },
   commands: CLAUDE_COMMANDS,

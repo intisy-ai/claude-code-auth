@@ -8,8 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Decision logic of claude-code-auth's {@code handle}, mirroring {@code src/driver/index.ts}.
- * This class owns EVERY branch/retry/rotation decision: the pre-loop body rewrite, the retry
+ * Decision logic for serving a request. This class owns EVERY branch/retry/rotation decision: the pre-loop body rewrite, the retry
  * loop, the status-&gt;action branching, and the final-fallback choice. It performs NO I/O
  * itself: the actual {@code fetch}, the IP-proxy-pool selection/fallback/reporting, and the SSE
  * byte-stream pass-through all stay host-side, driven through the two injected interfaces below,
@@ -33,7 +32,7 @@ public final class ClaudeHandleOrchestrator {
 
     // Exact wording -- matched verbatim by callers/fixtures.
     static final String NO_ACCOUNT_MESSAGE =
-            "No Claude account available — all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.";
+            "No Claude account available, all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.";
     // Exact wording -- matched verbatim by callers/fixtures.
     static final String RATE_LIMITED_ALL_MESSAGE =
             "No Claude account free right now (all rate-limited). Try again shortly.";

@@ -845,7 +845,7 @@
         "content-type": "application/json",
         "x-hub-chat-error": "1"
       },
-      "body": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"No Claude account available — all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.\"}}"
+      "body": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"No Claude account available, all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.\"}}"
     },
     "calls": [
       [

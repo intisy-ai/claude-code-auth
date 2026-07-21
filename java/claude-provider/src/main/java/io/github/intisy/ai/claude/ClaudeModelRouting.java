@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Model-routing pure functions mirroring claude-code-auth's {@code src/driver/index.ts}:
+ * Model-routing pure functions:
  * {@code isRateLimitStatus}, {@code resolveAutoModel}, {@code applyAssignedModel}, and the
  * MAPPING half of {@code fetchModels} (the actual {@code fetch("/v1/models")} call is host I/O
  * and is not implemented here). No mutable state; every method is static. Only the
@@ -103,8 +103,8 @@ public final class ClaudeModelRouting {
     // ---- fetchModels MAPPING half ---------------------------------------------------------------
 
     /**
-     * Maps a raw {@code GET /v1/models} response body JSON (already fetched by the host -- the
-     * fetch itself is Bucket B/host I/O, NOT ported here) to the {@code {models: {id: {name}}}}
+     * Maps a raw {@code GET /v1/models} response body JSON (already fetched by the host) to the
+     * {@code {models: {id: {name}}}}
      * shape core-auth's static-fallback merge expects: keeps only ids starting with {@code
      * "claude-"}, names each {@code (display_name || id) + " (Claude Code)"}. Returns {@code null}
      * (TS: {@code null}) when {@code modelsJson} fails to parse, has no usable top-level {@code

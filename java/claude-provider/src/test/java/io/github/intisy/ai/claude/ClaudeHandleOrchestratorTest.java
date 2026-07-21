@@ -259,7 +259,7 @@ class ClaudeHandleOrchestratorTest {
         assertEquals("1", decision.headers.get("x-hub-chat-error"));
         assertEquals("application/json", decision.headers.get("content-type"));
         assertEquals("{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":" +
-                "\"No Claude account available — all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.\"}}",
+                "\"No Claude account available, all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.\"}}",
                 decision.body);
     }
 

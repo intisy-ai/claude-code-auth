@@ -30,7 +30,7 @@ class HandleIrError extends Error {
 const PROVIDER_ID = "claude-code";
 const LANE = "messages"; // Claude subscription limits are account-wide
 
-// Lazily-memoized dynamic import of the TeaVM ESM — the generated file is staged to
+// Lazily-memoized dynamic import of the TeaVM ESM, the generated file is staged to
 // src/generated/ by `core/teavm-build.mjs` at build time and bundled by esbuild (deferred).
 let orchestratorPromise = null;
 function loadOrchestrator() {
@@ -115,7 +115,7 @@ export async function handleViaJavaOrchestrator(request, ctx) {
       if (proxyUrl) {
         proxyManager.reportResult(proxyUrl, false);
         // proxy unreachable -> retry directly (a dead proxy gives no isolation anyway)
-        log("fetch via proxy " + proxyUrl + " failed: " + error + " — retrying directly");
+        log("fetch via proxy " + proxyUrl + " failed: " + error + ", retrying directly");
         try {
           const directInit = { ...init };
           delete directInit.proxy;

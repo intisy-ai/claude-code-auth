@@ -179,7 +179,7 @@ async function verify(manager, view) {
     else if (response.status === 403) {
       // broken token (wrong scopes): disable + flag for re-login so it isn't used
       manager.mutate(view.id, (a) => { a.enabled = false; a.disabledReason = "re-login required (token lacks inference scope)"; });
-      out("✗ " + name + ": disabled — re-login required (403 scope)");
+      out("✗ " + name + ": disabled, re-login required (403 scope)");
     }
     else out("✗ " + name + ": " + response.status);
   } catch (error) {

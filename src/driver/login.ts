@@ -90,7 +90,7 @@ export async function loginFlow() {
 export async function login(opts) {
   const log = (opts && opts.log) || ((message) => process.stderr.write(message + "\n"));
   // opts.code: a code#state / redirect URL pasted as a CLI arg (container-friendly,
-  // no TTY needed — the PKCE verifier is recovered from the pasted state).
+  // no TTY needed, the PKCE verifier is recovered from the pasted state).
   const pastedCode = opts && opts.code;
   const flow = await loginFlow();
   if (!pastedCode) {

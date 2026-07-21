@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code GET /v1/models} discovery fetch for the example-server dashboard. Java port of the
- * HOST-I/O half of claude-code-auth's TS {@code fetchModels}; the MAPPING half is implemented
+ * {@code GET /v1/models} discovery fetch for the example-server dashboard. Performs the host-I/O;
+ * the mapping half is implemented
  * as {@link ClaudeModelRouting#fetchModelsMapping}, which this class feeds with the raw upstream
  * body.
  *
