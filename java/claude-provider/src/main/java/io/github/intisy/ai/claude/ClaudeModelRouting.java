@@ -9,17 +9,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Java port of the model-routing pure functions in claude-code-auth's {@code src/driver/index.ts}
- * (Bucket A, {@code .superpowers/port-grounding-map.md} line 13): {@code isRateLimitStatus}
- * (index.ts:31-33), {@code resolveAutoModel} (45-55), {@code applyAssignedModel} (61-70), and the
- * MAPPING half of {@code fetchModels} (204-209 -- the actual {@code fetch("/v1/models")} call is
- * Bucket B/host I/O and is NOT ported here). No mutable state; every method is static. Only the
- * {@link JsonCodec} SPI is used -- no gson/java.net/java.nio/reflection/threads/System.getenv, so
+ * Model-routing pure functions:
+ * {@code isRateLimitStatus}, {@code resolveAutoModel}, {@code applyAssignedModel}, and the
+ * MAPPING half of {@code fetchModels} (the actual {@code fetch("/v1/models")} call is host I/O
+ * and is not implemented here). No mutable state; every method is static. Only the
+ * {@link JsonCodec} SPI is used, no gson/java.net/java.nio/reflection/threads/System.getenv, so
  * this class is TeaVM-transpilable (see {@code :claude-teavm}).
- *
- * <p>Parity snapshotted (per task-6b-report.md) from a throwaway Node harness that extracted these
- * functions verbatim from {@code src/driver/index.ts}, run with {@code node} v26.3.1 -- not
- * hand-derived from reading the TS alone.
  */
 public final class ClaudeModelRouting {
 
@@ -29,12 +24,11 @@ public final class ClaudeModelRouting {
     private ClaudeModelRouting() {
     }
 
-    /** index.ts:31-33. */
     public static boolean isRateLimitStatus(int status) {
         return status == 429 || status == 529;
     }
 
-    // ---- resolveAutoModel (index.ts:45-55) -----------------------------------------------------
+    // ---- resolveAutoModel ---------------------------------------------------------------------
 
     /**
      * If the effective requested model -- {@code body.model}, falling back to {@code ctxModel}
@@ -43,8 +37,8 @@ public final class ClaudeModelRouting {
      * generic Auto model ({@code "claude-code-auto"}, or any {@code "claude-code-"}-prefixed id
      * whose suffix after stripping that prefix is exactly {@code "auto"}), rewrites {@code
      * body.model} to {@code topAutoCandidate}. The TS instead reads {@code
-     * getAutoCandidates("claude-code")[0]} live from the leaderboard -- that leaderboard STAYS TS;
-     * the candidate is PASSED IN here (per the T6b brief, "the leaderboard stays TS").
+     * getAutoCandidates("claude-code")[0]} live from the leaderboard, which stays TS; the
+     * candidate is passed in here.
      *
      * <p>Returns {@code bodyText} UNCHANGED (verbatim, not re-stringified) in every one of these
      * cases, matching every TS early-return exactly:
@@ -53,16 +47,15 @@ public final class ClaudeModelRouting {
      *   <li>{@code bodyText} fails to parse as JSON (TS {@code catch { return bodyText; }});</li>
      *   <li>the parsed body is JS-falsy (null, {@code 0}, {@code false}, {@code ""} -- TS
      *       {@code !obj}), including an absent/empty {@code bodyText};</li>
-     *   <li>{@code topAutoCandidate} is {@code null}/empty ("no ranking yet" -- index.ts:52's own
-     *       comment).</li>
+     *   <li>{@code topAutoCandidate} is {@code null}/empty ("no ranking yet").</li>
      * </ul>
      * A parsed body that is JS-truthy but NOT an object (e.g. a bare JSON number/string/boolean)
      * is an unreachable edge case for this provider (Anthropic Messages bodies are always JSON
-     * objects); the real TS would attempt {@code obj.model = top} there, which in this codebase's
-     * ES-module strict-mode context throws on a primitive. This port does NOT reproduce that
-     * crash -- it safely falls back to returning {@code bodyText} unchanged, a deliberate,
-     * documented safety divergence from an unreachable TS bug rather than an "improvement" to any
-     * reachable behavior.
+     * objects); the real TS would attempt {@code obj.model = top} there, which in a strict-mode
+     * JS context throws on a primitive. This method does NOT reproduce that crash: it safely
+     * falls back to returning {@code bodyText} unchanged, a deliberate, documented safety
+     * divergence from an unreachable TS bug rather than an "improvement" to any reachable
+     * behavior.
      */
     @SuppressWarnings("unchecked")
     public static String resolveAutoModel(JsonCodec json, String bodyText, String ctxModel, String topAutoCandidate) {
@@ -75,12 +68,12 @@ public final class ClaudeModelRouting {
         return json.stringify(obj);
     }
 
-    // ---- applyAssignedModel (index.ts:61-70) ---------------------------------------------------
+    // ---- applyAssignedModel -------------------------------------------------------------------
 
     /**
      * The router's assigned model ({@code ctxModel}) is authoritative for this request: if the
      * body still carries a different id, rewrites {@code body.model} to {@code ctxModel} and logs
-     * {@code "model rewrite: X -> Y (tier assignment)"} (exact TS wording, index.ts:67).
+     * {@code "model rewrite: X -> Y (tier assignment)"} (exact TS wording).
      *
      * <p>No-ops (returns {@code bodyText} verbatim) when: {@code ctxModel} is empty or names the
      * Auto model (same {@code isAutoModelId} check as {@link #resolveAutoModel}); {@code bodyText}
@@ -107,11 +100,11 @@ public final class ClaudeModelRouting {
         return json.stringify(map);
     }
 
-    // ---- fetchModels MAPPING half (index.ts:204-209) -------------------------------------------
+    // ---- fetchModels MAPPING half ---------------------------------------------------------------
 
     /**
-     * Maps a raw {@code GET /v1/models} response body JSON (already fetched by the host -- the
-     * fetch itself is Bucket B/host I/O, NOT ported here) to the {@code {models: {id: {name}}}}
+     * Maps a raw {@code GET /v1/models} response body JSON (already fetched by the host) to the
+     * {@code {models: {id: {name}}}}
      * shape core-auth's static-fallback merge expects: keeps only ids starting with {@code
      * "claude-"}, names each {@code (display_name || id) + " (Claude Code)"}. Returns {@code null}
      * (TS: {@code null}) when {@code modelsJson} fails to parse, has no usable top-level {@code

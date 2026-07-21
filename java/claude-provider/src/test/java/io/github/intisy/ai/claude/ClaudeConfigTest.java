@@ -15,8 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Typed-capability parity test for {@link ClaudeConfig}: {@link ClaudeConfig#schema()}/{@link
- * ClaudeConfig#values}/{@link ClaudeConfig#putValues} replace the retired {@code GET/PUT
- * /v1/config} HttpResponse branches -- same 5 settings, same persistence semantics.
+ * ClaudeConfig#values}/{@link ClaudeConfig#putValues}, same 5 settings, same persistence
+ * semantics.
  */
 class ClaudeConfigTest {
 

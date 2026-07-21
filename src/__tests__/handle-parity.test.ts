@@ -1,6 +1,6 @@
 // @ts-nocheck
-// Java-orchestrator regression: runs handleViaJavaOrchestrator against the SAME scripted scenarios
-// that once proved TS≡Java, asserting output against a frozen fixture captured from that baseline.
+// Java-orchestrator regression: runs handleViaJavaOrchestrator against scripted scenarios,
+// asserting output against a frozen fixture pinning known-good behavior.
 
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 
@@ -111,11 +111,10 @@ function resetForRun(sc: any) {
   harness.outbound = [];
 }
 
-// FIX 2 (IMPORTANT-2): capture the OUTBOUND request each path actually hands to `fetch` so the
-// harness can assert Java `prepareClaudeRequest` and TS `prepareClaudeRequest` produce byte-identical
-// wire requests end-to-end (url/method/headers/body + the host-set proxy) — not just in T6a's
-// isolated unit tests. Header keys are sorted (order is not wire-significant) but case is preserved
-// so a genuine casing divergence would still surface.
+// Capture the OUTBOUND request the orchestrator actually hands to `fetch` so the harness can
+// assert the wire request produced end-to-end (url/method/headers/body + the host-set proxy)
+// matches the frozen fixture exactly. Header keys are sorted (order is not wire-significant) but
+// case is preserved so a genuine casing divergence would still surface.
 function captureOutbound(url: any, init: any) {
   init = init || {};
   const rawHeaders = init.headers || {};
@@ -188,8 +187,8 @@ let realFetch: any;
 beforeEach(() => {
   globalThis.Date = FrozenDate as any;
   realFetch = globalThis.fetch;
-  // Scripted fetch — consumes harness.fetchScript by call order; NO real network is ever touched.
-  // Every call's outbound (url, init) is recorded first for the FIX-2 wire-parity assertion.
+  // Scripted fetch: consumes harness.fetchScript by call order; no real network is ever touched.
+  // Every call's outbound (url, init) is recorded first for the wire-parity assertion.
   globalThis.fetch = (async (url: any, init: any) => {
     harness.outbound.push(captureOutbound(url, init));
     const thunk = harness.fetchScript[harness.fetchIdx++];
@@ -232,17 +231,16 @@ const scenarios: any[] = [
     fetch: [resp(429, RESET_HEADERS, "rate limited"), resp(200, jsonHeaders, '{"ok":true}')],
   },
   {
-    // FIX 1 (IMPORTANT-1): a 429 with NO reset header. The TS path falls through parseResetMs to
-    // the exponential-backoff fallback (request.ts:89-91): reportRateLimit(now + 60_000*2^attempt).
-    // Before the fix the Java path passed null here → this scenario FAILS; after the fix both call
-    // reportRateLimit with the SAME numeric reset (deterministic via the frozen clock).
+    // A 429 with no reset header. The TS path falls through parseResetMs to the exponential-backoff
+    // fallback: reportRateLimit(now + 60_000*2^attempt). Both paths must produce the same numeric
+    // reset (deterministic via the frozen clock).
     name: "429 with NO reset header then ok — exponential-backoff reset parity",
     accounts: [{ id: "acc1", enabled: true }, { id: "acc2", enabled: true }],
     acquire: [{ id: "acc1", access: "tok1" }, { id: "acc2", access: "tok2" }],
     fetch: [resp(429, jsonHeaders, "rate limited"), resp(200, jsonHeaders, '{"ok":true}')],
   },
   {
-    // Same, for a 529 (Anthropic "overloaded") — also rate-limit-classified, also header-less here.
+    // Same, for a 529 (Anthropic "overloaded"), also rate-limit-classified, also header-less here.
     name: "529 with NO reset header then ok — exponential-backoff reset parity",
     accounts: [{ id: "acc1", enabled: true }, { id: "acc2", enabled: true }],
     acquire: [{ id: "acc1", access: "tok1" }, { id: "acc2", access: "tok2" }],
@@ -324,7 +322,7 @@ describe("handle regression: Java orchestrator vs frozen fixture", () => {
   }
 });
 
-// --- SP-3 T2: handleIr ------------------------------------------------------------------------
+// --- handleIr -----------------------------------------------------------------------------------
 
 async function collectStream(stream) {
   const reader = stream.getReader();

@@ -20,15 +20,14 @@ import java.nio.file.Paths;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Phase 6 self-assembled backend (mirrors antigravity-auth's {@code AntigravityBackend}): builds
+ * Self-assembled backend (mirrors antigravity-auth's {@code AntigravityBackend}): builds
  * the {@code :jvm} SPI implementations + a real {@code AccountManager} lazily from {@link
  * io.github.intisy.ai.shared.routing.HandlerCtx#configDir}, memoized per {@code configDir} so
  * repeated {@code handle()} calls on the same provider instance reuse one {@code Store}/
  * {@code AccountManager} rather than re-opening the accounts file store on every request.
  *
- * <p>Claude OAuth (see the phase-6 interface map's Part D1, from claude-code-auth's own
- * {@code src/constants.ts}): {@code clientId} is a PUBLIC PKCE installed-app id (safe to inline,
- * not a secret); Claude's public client uses NO client secret, unlike antigravity's Google OAuth
+ * <p>Claude OAuth: {@code clientId} is a PUBLIC PKCE installed-app id (safe to inline, not a
+ * secret); Claude's public client uses NO client secret, unlike antigravity's Google OAuth
  * client.
  */
 final class ClaudeBackend {

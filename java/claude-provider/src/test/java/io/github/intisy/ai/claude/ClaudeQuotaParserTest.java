@@ -12,10 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Offline deterministic parity tests for {@link ClaudeQuotaParser}, checked against
- * claude-code-auth's actual {@code src/driver/accounts-controller.ts} behavior: the TS's pure
- * functions were extracted verbatim into a throwaway Node harness and executed with {@code node}
- * (v26.3.1) to snapshot the exact expected values used below -- not hand-derived from reading the
- * source alone. See task-6a-report.md for the harness.
+ * claude-code-auth's actual {@code src/driver/accounts-controller.ts} behavior.
  */
 class ClaudeQuotaParserTest {
 

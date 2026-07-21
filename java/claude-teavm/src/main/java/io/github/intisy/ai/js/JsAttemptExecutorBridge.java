@@ -15,12 +15,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * First of the two async JS bridges T6c1 proves compose inside one TeaVM CPS-transformed
- * orchestrator loop: a {@link ClaudeHandleOrchestrator.AttemptExecutor} (blocking-shaped --
- * {@code execute(accountId, prepared): AttemptResult}) whose implementation is actually a
- * JS-provided async function ({@code fetch}+IP-proxy-pool-backed in production; a delayed mock in
- * the node smoke), bridged via TeaVM's {@code @Async} native method + {@link AsyncCallback}
- * mechanism -- the EXACT shape of core-proxy's proven {@code JsHttpClientBridge}.
+ * One of two async JS bridges composing inside one TeaVM CPS-transformed orchestrator loop: a
+ * {@link ClaudeHandleOrchestrator.AttemptExecutor} (blocking-shaped -- {@code
+ * execute(accountId, prepared): AttemptResult}) whose implementation is actually a JS-provided
+ * async function ({@code fetch}+IP-proxy-pool-backed in production; a delayed mock in the node
+ * smoke), bridged via TeaVM's {@code @Async} native method + {@link AsyncCallback} mechanism, the
+ * EXACT shape of core-proxy's proven {@code JsHttpClientBridge}.
  *
  * <p>Mechanism (mirrors {@code JsHttpClientBridge}): {@link #execute} looks synchronous to
  * {@link ClaudeHandleOrchestrator#handle}, but internally suspends on {@link #awaitExecute}, a
@@ -28,8 +28,8 @@ import java.util.Map;
  * graph suspends" up to the entrypoint ({@link ClaudeProviderJs#handleClaudeRequestAsync}'s
  * {@code JSPromise}-backing thread), so the suspend/resume surfaces to JS as the returned Promise
  * settling once the JS-side {@code execute} resolves. Because {@code handle} calls this inside a
- * loop that ALSO suspends on {@link JsAccountOpsBridge#acquire}, this is the second half of the
- * two-{@code @Async}-in-one-call-graph composition being de-risked.
+ * loop that ALSO suspends on {@link JsAccountOpsBridge#acquire}, this is the second half of a
+ * two-{@code @Async}-in-one-call-graph composition.
  */
 public final class JsAttemptExecutorBridge implements ClaudeHandleOrchestrator.AttemptExecutor {
 

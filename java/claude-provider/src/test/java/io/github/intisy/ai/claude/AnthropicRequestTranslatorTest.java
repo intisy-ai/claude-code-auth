@@ -17,16 +17,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Offline deterministic parity tests for {@link AnthropicRequestTranslator}, checked against
- * claude-code-auth's actual {@code src/plugin/request.ts} behavior: the TS's pure functions were
- * extracted verbatim (backoff-fallback branch omitted) into a throwaway Node harness and executed
- * with {@code node} (v26.3.1) to snapshot the exact expected values used below -- not
- * hand-derived from reading the source alone. See task-6a-report.md for the harness.
+ * claude-code-auth's actual {@code src/plugin/request.ts} behavior (the backoff-fallback branch
+ * of {@code parseResetMs} is intentionally omitted here; see the class javadoc).
  *
- * <p>{@code ensureClaudeCodeSystemBlocks} (SP-2, IR-based) supersedes the deleted raw-JSON
- * {@code ensureClaudeCodeSystem} -- every case its own unit tests below cover was previously
- * covered directly against a JSON {@code Map}; {@code prepareClaudeRequest_*} tests further down
- * cover the same wire shapes end to end (structurally, via {@code json.parse} on the produced
- * body, since the IR round trip can reorder JSON keys -- never wire-significant).
+ * <p>{@code prepareClaudeRequest_*} tests further down cover the {@code
+ * ensureClaudeCodeSystemBlocks} wire shapes end to end (structurally, via {@code json.parse} on
+ * the produced body, since the IR round trip can reorder JSON keys, never wire-significant).
  */
 class AnthropicRequestTranslatorTest {
 
@@ -53,31 +49,31 @@ class AnthropicRequestTranslatorTest {
 
     @Test
     void ensureClaudeCodeSystemBlocks_nullSystem_injectsIdentityBlock() {
-        // Covers the deleted method's "absent"/"explicit null"/"non-string-non-array" cases at
-        // once -- AnthropicRequestCodec.decodeRequest decodes all three of those wire shapes to
+        // Covers the "absent"/"explicit null"/"non-string-non-array" cases at once:
+        // AnthropicRequestCodec.decodeRequest decodes all three of those wire shapes to
         // the SAME `system == null`.
         assertIdentitySingleton(AnthropicRequestTranslator.ensureClaudeCodeSystemBlocks(null));
     }
 
     @Test
     void ensureClaudeCodeSystemBlocks_emptySystem_injectsIdentityBlock() {
-        // Covers the deleted method's "empty array" case (Array.isArray([]) === true in JS, but
-        // its first element is undefined -> not the identity block -> prepended to nothing).
+        // Covers the "empty array" case (Array.isArray([]) === true in JS, but its first element
+        // is undefined -> not the identity block -> prepended to nothing).
         assertIdentitySingleton(AnthropicRequestTranslator.ensureClaudeCodeSystemBlocks(blocks()));
     }
 
     @Test
     void ensureClaudeCodeSystemBlocks_singleIdentityBlock_dedupesToSingleBlock() {
-        // Covers the deleted method's "string exactly identity" case -- a bare wire string always
-        // decodes to a single TextBlock, indistinguishable at the Block level from a
-        // single-element wire array carrying the same text.
+        // Covers the "string exactly identity" case: a bare wire string always decodes to a
+        // single TextBlock, indistinguishable at the Block level from a single-element wire
+        // array carrying the same text.
         List<Block> result = AnthropicRequestTranslator.ensureClaudeCodeSystemBlocks(blocks(text(CCS)));
         assertIdentitySingleton(result);
     }
 
     @Test
     void ensureClaudeCodeSystemBlocks_singleOtherBlock_prependsIdentityKeepingOriginalAsSecondBlock() {
-        // Covers the deleted method's "string other" case.
+        // Covers the "string other" case.
         List<Block> result = AnthropicRequestTranslator.ensureClaudeCodeSystemBlocks(blocks(text("custom system prompt")));
         assertEquals(2, result.size());
         assertEquals(CCS, ((TextBlock) result.get(0)).text);
@@ -142,9 +138,9 @@ class AnthropicRequestTranslatorTest {
 
     @Test
     void mergeBeta_substringMatch_leftUnchanged_matchesTsIncludesLiterally() {
-        // TS uses `existing.includes(BETA)` -- a substring check, not comma-list membership.
+        // TS uses `existing.includes(BETA)`, a substring check, not comma-list membership.
         // "foo-oauth-2025-04-20-bar" is (arguably incorrectly) treated as already containing the
-        // flag. Matched literally per the brief, not "improved".
+        // flag. Matched literally, not "improved".
         assertEquals("foo-oauth-2025-04-20-bar", AnthropicRequestTranslator.mergeBeta("foo-oauth-2025-04-20-bar"));
     }
 
@@ -252,8 +248,7 @@ class AnthropicRequestTranslatorTest {
         assertFalse(result.streaming);
     }
 
-    // ---- prepareClaudeRequest system-block wire shapes (end to end through the IR round trip,
-    // covering the same cases the deleted raw-JSON ensureClaudeCodeSystem's own tests used to) --
+    // ---- prepareClaudeRequest system-block wire shapes (end to end through the IR round trip) ----
 
     @Test
     void prepareClaudeRequest_absentSystem_injectsIdentityBlock() {

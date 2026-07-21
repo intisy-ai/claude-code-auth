@@ -4,9 +4,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Small hand-rolled helpers reproducing the JS runtime coercions the ported TS relies on
- * implicitly ({@code Number(...)}, {@code parseFloat(...)}, {@code parseInt(str, 10)}, and truthy
- * checks) -- kept package-private and shared by {@link AnthropicRequestTranslator} and
+ * Small hand-rolled helpers reproducing the JS runtime coercions this codebase's header/JSON
+ * parsing depends on ({@code Number(...)}, {@code parseFloat(...)}, {@code parseInt(str, 10)},
+ * and truthy checks) -- kept package-private and shared by {@link AnthropicRequestTranslator} and
  * {@link ClaudeQuotaParser} rather than duplicated. Intentionally simplified vs the full
  * ECMA-262 ToNumber/parseFloat/parseInt grammars (no numeric separators, no arbitrary
  * Unicode whitespace beyond {@link String#trim()} / {@code \s}, no BigInt) -- sufficient for the

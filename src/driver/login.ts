@@ -2,7 +2,7 @@
 // Claude Code OAuth login. loginFlow() is the split begin/complete form core-auth
 // drives (opencode oauth method + Claude TUI menu); login() is the all-in-one CLI
 // form. The redirect lands on platform.claude.com and shows a `code#state` string
-// the user pastes back — there is no localhost loopback to listen on.
+// the user pastes back; there is no localhost loopback to listen on.
 
 import { spawn } from "child_process";
 import { createInterface } from "node:readline";
@@ -81,7 +81,7 @@ export async function loginFlow() {
       "Sign in to Claude, then copy the authorization code shown (format: code#state) and paste it here.",
     // paste path: opencode's "code" method + the in-tab paste both pass the text.
     // Claude's redirect just displays a code (no localhost), so there is no
-    // loopback to expose — pasting the code is how the flow completes.
+    // loopback to expose; pasting the code is how the flow completes.
     complete: (input) => finish(parsePastedCallback(input)),
     cancel: () => {},
   };
@@ -90,7 +90,7 @@ export async function loginFlow() {
 export async function login(opts) {
   const log = (opts && opts.log) || ((message) => process.stderr.write(message + "\n"));
   // opts.code: a code#state / redirect URL pasted as a CLI arg (container-friendly,
-  // no TTY needed — the PKCE verifier is recovered from the pasted state).
+  // no TTY needed, the PKCE verifier is recovered from the pasted state).
   const pastedCode = opts && opts.code;
   const flow = await loginFlow();
   if (!pastedCode) {

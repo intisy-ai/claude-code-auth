@@ -1,13 +1,13 @@
 // @ts-nocheck
 // Claude Code OAuth constants. These are the public installed-app credentials of
 // the real Claude Code CLI (extracted from the shipped binary, @anthropic-ai/
-// claude-code) — the same client every Claude Code user authenticates against, so
-// hardcoding them is correct (see the antigravity-account-isolation model). The
-// host migrated to platform.claude.com in recent CLI versions.
+// claude-code), the same client every Claude Code user authenticates against, so
+// hardcoding them is correct. The host migrated to platform.claude.com in recent
+// CLI versions.
 
 export const CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
-// AUTHORIZE must be claude.ai — that host grants a Pro/Max SUBSCRIPTION token with a
+// AUTHORIZE must be claude.ai, that host grants a Pro/Max SUBSCRIPTION token with a
 // real user:inference entitlement. platform.claude.com/oauth/authorize is the Console
 // surface: it mints an API-key-mode token that /v1/messages rejects with
 // "OAuth token does not meet scope requirement (user:inference…)" (403). The host is

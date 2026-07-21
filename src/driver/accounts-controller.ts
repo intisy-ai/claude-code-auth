@@ -12,7 +12,7 @@ function out(message) {
 
 // --- Quota (subscription rate-limit pools) ----------------------------------
 // Anthropic returns unified rate-limit headers on EVERY response, one pool per
-// bucket (5h, 7d, and any Anthropic adds later — e.g. a per-model weekly bucket
+// bucket (5h, 7d, and any Anthropic adds later, e.g. a per-model weekly bucket
 // for Fable), each with utilization (0..>1), reset (epoch s) and status. Buckets
 // are DISCOVERED from the header names, never hardcoded, so new pools appear
 // automatically. We capture them per account so the Quota view shows real usage
@@ -64,7 +64,7 @@ function bucketOfLimit(limit) {
   return base ? base + (scopeKey ? "-" + scopeKey : "") : null;
 }
 
-// Authoritative pool list from the OAuth usage endpoint — the same source Claude
+// Authoritative pool list from the OAuth usage endpoint, the same source Claude
 // Code's /usage screen reads. Unlike response headers it returns EVERY pool,
 // including per-model weekly buckets (e.g. Fable), without needing a request to
 // that model. Returns null on any failure (caller falls back to the header ping).
@@ -111,7 +111,7 @@ function claudeQuota(account) {
   return pools.length ? pools : undefined;
 }
 
-// On-demand refresh: the usage endpoint first (full, authoritative pool list —
+// On-demand refresh: the usage endpoint first (full, authoritative pool list,
 // REPLACES the cache); fall back to a tiny max_tokens:1 ping whose response
 // headers carry the request-relevant pools (merged into the cache).
 async function refreshQuotaOne(manager, accountId) {
@@ -177,9 +177,9 @@ async function verify(manager, view) {
     if (response.status === 200 || response.status === 400 || response.status === 429) out("✓ " + name + ": verified");
     else if (response.status === 401) out("✗ " + name + ": token expired or revoked (401)");
     else if (response.status === 403) {
-      // broken token (wrong scopes) — disable + flag for re-login so it isn't used
+      // broken token (wrong scopes): disable + flag for re-login so it isn't used
       manager.mutate(view.id, (a) => { a.enabled = false; a.disabledReason = "re-login required (token lacks inference scope)"; });
-      out("✗ " + name + ": disabled — re-login required (403 scope)");
+      out("✗ " + name + ": disabled, re-login required (403 scope)");
     }
     else out("✗ " + name + ": " + response.status);
   } catch (error) {

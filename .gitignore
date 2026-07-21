@@ -15,3 +15,5 @@ package-lock.json
 java/build/
 java/*/build/
 java/.gradle/
+docs/
+graphify-out/

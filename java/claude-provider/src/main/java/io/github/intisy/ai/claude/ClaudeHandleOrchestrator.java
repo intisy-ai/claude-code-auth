@@ -8,43 +8,35 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Java port of the DECISION logic of claude-code-auth's {@code handle} (Bucket A/B split per
- * {@code .superpowers/port-grounding-map.md}; boundary recorded as ai-java's "BOUNDARY DECISION
- * 2026-07-14" in {@code .superpowers/sdd/progress.md}): {@code src/driver/index.ts:72-177}. This
- * class owns EVERY branch/retry/rotation decision -- the pre-loop body rewrite, the retry loop,
- * the status-&gt;action branching, and the final-fallback choice. It performs NO I/O itself: the
- * actual {@code fetch}, the IP-proxy-pool selection/fallback/reporting, and the SSE byte-stream
- * pass-through all stay host-side, driven through the two injected interfaces below --
+ * Decision logic for serving a request. This class owns EVERY branch/retry/rotation decision: the pre-loop body rewrite, the retry
+ * loop, the status-&gt;action branching, and the final-fallback choice. It performs NO I/O
+ * itself: the actual {@code fetch}, the IP-proxy-pool selection/fallback/reporting, and the SSE
+ * byte-stream pass-through all stay host-side, driven through the two injected interfaces below,
  * {@link AttemptExecutor} (transport) and {@link AccountOps} (account rotation/reporting). No
  * response BODY ever crosses into this class: on a servable outcome it returns {@link
- * HandleDecision#serve} carrying only the host's own opaque {@code attemptRef} -- the host streams
+ * HandleDecision#serve} carrying only the host's own opaque {@code attemptRef}; the host streams
  * that attempt's retained live response back to the client verbatim (SSE intact).
  *
- * <p>Uses only {@link JsonCodec} (body parse/stringify, via {@link ClaudeModelRouting} and T6a's
- * {@link AnthropicRequestTranslator}) and {@link Clock} (index.ts's implicit {@code Date.now()}
- * inside {@code parseResetMs}'s retry-after branch, made an explicit constructor dependency here
- * purely for test determinism -- mirrors T6a's own {@code parseResetMs(headers, nowMillis)}
- * design). BOTH are pre-existing core-proxy {@code :routing} SPIs (not new ones this task
- * introduces). No gson/java.net/java.nio/reflection/threads/System.getenv -- TeaVM-transpilable.
- *
- * <p>Parity snapshotted (see task-6b-report.md) from a throwaway Node harness that reconstructed
- * {@code handle}'s control flow verbatim from {@code src/driver/index.ts} (deps that stay TS --
- * {@code manager}/{@code proxyManager}/{@code getMaxAttempts}/{@code getAutoCandidates} -- injected
- * via closures instead of the real imports) driven with a scripted fake {@code fetch} and recording
- * fakes, run with {@code node} v26.3.1 -- not hand-derived from reading the TS alone.
+ * <p>Uses only {@link JsonCodec} (body parse/stringify, via {@link ClaudeModelRouting} and
+ * {@link AnthropicRequestTranslator}) and {@link Clock} (the TS driver's implicit {@code
+ * Date.now()} inside {@code parseResetMs}'s retry-after branch, made an explicit constructor
+ * dependency here purely for test determinism, mirroring {@code AnthropicRequestTranslator}'s
+ * own {@code parseResetMs(headers, nowMillis)} design). Both are pre-existing core-proxy
+ * {@code :routing} SPIs. No gson/java.net/java.nio/reflection/threads/System.getenv, so this
+ * class is TeaVM-transpilable.
  */
 public final class ClaudeHandleOrchestrator {
 
-    /** index.ts:24 -- Claude subscription limits are account-wide, so every request shares one lane. */
+    /** Claude subscription limits are account-wide, so every request shares one lane. */
     public static final String LANE = "messages";
 
-    // index.ts:93 / core-auth src/errors.ts:13-34 (chatError) -- exact wording, verbatim from the TS.
+    // Exact wording -- matched verbatim by callers/fixtures.
     static final String NO_ACCOUNT_MESSAGE =
-            "No Claude account available — all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.";
-    // index.ts:94 (errorResponse(503, ...)) -- exact wording, verbatim.
+            "No Claude account available, all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.";
+    // Exact wording -- matched verbatim by callers/fixtures.
     static final String RATE_LIMITED_ALL_MESSAGE =
             "No Claude account free right now (all rate-limited). Try again shortly.";
-    // index.ts:159 -- exact disabledReason string; callers may assert this verbatim.
+    // Exact disabledReason string; callers may assert this verbatim.
     static final String DISABLED_REASON_403 = "re-login required (token lacks inference scope)";
 
     private static final Logger NOOP_LOGGER = msg -> { };
@@ -61,8 +53,8 @@ public final class ClaudeHandleOrchestrator {
 
     /**
      * Executes ONE attempt against the upstream: fetch + IP-proxy selection/fallback/reporting are
-     * ALL host-internal here (index.ts:100-131) -- the orchestrator never sees a proxy URL or a
-     * live {@code Response}. Only the decision-relevant summary comes back.
+     * ALL host-internal here; the orchestrator never sees a proxy URL or a live {@code Response}.
+     * Only the decision-relevant summary comes back.
      */
     public interface AttemptExecutor {
         AttemptResult execute(String accountId, AnthropicRequestTranslator.PreparedRequest prepared);
@@ -74,10 +66,10 @@ public final class ClaudeHandleOrchestrator {
         public final Map<String, String> headers;
         /**
          * True when the host exhausted every transport strategy (proxy + direct retry) for this
-         * attempt without ever getting a response (index.ts:111-129, collapsed to one flag -- the
-         * per-branch TS log/report calls for "fetch failed"/"direct retry failed" with the real JS
-         * {@code Error} text stay host-side, since only the host ever sees that error object; see
-         * {@link #handle} for how this flag is surfaced to {@link AccountOps#reportError}).
+         * attempt without ever getting a response (collapsed to one flag; the per-branch log/report
+         * calls for "fetch failed"/"direct retry failed" with the real JS {@code Error} text stay
+         * host-side, since only the host ever sees that error object; see {@link #handle} for how
+         * this flag is surfaced to {@link AccountOps#reportError}).
          */
         public final boolean transportFailed;
         /** Opaque host-supplied handle the host uses to map back to its retained live response. */
@@ -92,13 +84,12 @@ public final class ClaudeHandleOrchestrator {
     }
 
     /**
-     * Account rotation/reporting -- maps 1:1 onto core-auth's {@code AccountManager} (TS host
-     * today) and onto core-auth Java's equivalent account ops (future Java server). This
+     * Account rotation/reporting, maps 1:1 onto core-auth's {@code AccountManager}. This
      * orchestrator only DECLARES the interface and calls it in the right order; it never
      * implements it (parity tests supply a recording fake).
      */
     public interface AccountOps {
-        /** {@code manager.acquire(lane)} (index.ts:85). {@code null} &lt;=&gt; the TS's {@code !acquired || !acquired.account}. */
+        /** {@code manager.acquire(lane)}. {@code null} &lt;=&gt; the TS's {@code !acquired || !acquired.account}. */
         Acquired acquire(String lane);
 
         void reportError(String accountId, int attempt, String message);
@@ -107,17 +98,17 @@ public final class ClaudeHandleOrchestrator {
 
         void reportSuccess(String accountId);
 
-        /** {@code manager.mutate(accountId, a => { a.enabled = false; a.disabledReason = reason; })} (index.ts:159). */
+        /** {@code manager.mutate(accountId, a => { a.enabled = false; a.disabledReason = reason; })}. */
         void disable(String accountId, String reason);
 
-        /** {@code manager.list().filter(a => a.enabled !== false).length} (index.ts:87). */
+        /** {@code manager.list().filter(a => a.enabled !== false).length}. */
         int listEnabledCount();
 
-        /** {@code captureQuota(manager, accountId, headers)} (index.ts:135) -- called on every non-transport-failed response. */
+        /** {@code captureQuota(manager, accountId, headers)}, called on every non-transport-failed response. */
         void captureQuota(String accountId, Map<String, String> headers);
     }
 
-    /** {@code {account: {id}, access}} as returned by {@code manager.acquire} (index.ts:85-97). */
+    /** {@code {account: {id}, access}} as returned by {@code manager.acquire}. */
     public static final class Acquired {
         public final String accountId;
         public final String access;
@@ -135,31 +126,31 @@ public final class ClaudeHandleOrchestrator {
         public String url;
         public String method;
         public Map<String, String> headers;
-        /** {@code await request.clone().text()} (index.ts:77) -- already read by the host; {@code null} on a read failure. */
+        /** {@code await request.clone().text()}, already read by the host; {@code null} on a read failure. */
         public String bodyText;
         /** {@code ctx.model} -- the router's assigned model for this request. */
         public String ctxModel;
         /**
-         * {@code getAutoCandidates("claude-code")[0]} (index.ts:51) -- the leaderboard stays TS;
-         * PASSED IN here per the T6b brief. {@code null}/empty means "no ranking yet".
+         * {@code getAutoCandidates("claude-code")[0]}; the leaderboard stays TS, so the value is
+         * passed in here. {@code null}/empty means "no ranking yet".
          */
         public String topAutoCandidate;
-        /** {@code ctx.log} (index.ts:73); {@code null} defaults to a no-op, matching the TS {@code || (() => {})}. */
+        /** {@code ctx.log}; {@code null} defaults to a no-op, matching the TS {@code || (() => {})}. */
         public Logger log;
     }
 
-    /** Per-request tunables the host re-reads fresh each call (index.ts:82's own comment). */
+    /** Per-request tunables the host re-reads fresh each call. */
     public static final class OrchestratorConfig {
-        /** {@code getMaxAttempts()} (index.ts:82) -- read per-request so a config edit applies without a restart. */
+        /** {@code getMaxAttempts()}, read per-request so a config edit applies without a restart. */
         public int maxAttempts;
         /**
-         * {@code getDefaultCooldownSeconds()} (settings.ts:38) -- base seconds for the exponential
-         * backoff applied to a 429/529 that carries NO reset header. Doubles per attempt. Defaults
-         * mirror settings.ts's DEFAULT_COOLDOWN_SECONDS/MAX_COOLDOWN_SECONDS so a config that omits
-         * them still backs off exactly like the TS path rather than collapsing to "reset = now".
+         * {@code getDefaultCooldownSeconds()}, base seconds for the exponential backoff applied to
+         * a 429/529 that carries NO reset header. Doubles per attempt. Defaults mirror the TS
+         * settings' DEFAULT_COOLDOWN_SECONDS/MAX_COOLDOWN_SECONDS so a config that omits them still
+         * backs off exactly like the TS path rather than collapsing to "reset = now".
          */
         public int defaultCooldownSeconds = 60;
-        /** {@code getMaxCooldownSeconds()} (settings.ts:44) -- cap the doubling backoff can grow to. */
+        /** {@code getMaxCooldownSeconds()}, cap the doubling backoff can grow to. */
         public int maxCooldownSeconds = 900;
     }
 
@@ -205,14 +196,13 @@ public final class ClaudeHandleOrchestrator {
     // ---- the state machine ---------------------------------------------------------------------
 
     /**
-     * Ports {@code handle} (index.ts:72-177) verbatim: pre-loop body prep, then the retry loop over
-     * {@code cfg.maxAttempts}, branching on each attempt's outcome in the EXACT order the TS does --
-     * rate-limit before 401 before 403 before success before "surface as-is".
+     * Implements {@code handle}'s decision flow: pre-loop body prep, then the retry loop over
+     * {@code cfg.maxAttempts}, branching on each attempt's outcome in the same order as the TS
+     * driver: rate-limit before 401 before 403 before success before "surface as-is".
      */
     public HandleDecision handle(RequestInputs in, OrchestratorConfig cfg, AttemptExecutor exec, AccountOps accounts) {
         Logger log = in.log != null ? in.log : NOOP_LOGGER;
 
-        // index.ts:78-79
         String bodyText = ClaudeModelRouting.resolveAutoModel(json, in.bodyText, in.ctxModel, in.topAutoCandidate);
         bodyText = ClaudeModelRouting.applyAssignedModel(json, bodyText, in.ctxModel, log);
 
@@ -228,8 +218,8 @@ public final class ClaudeHandleOrchestrator {
             Acquired acquired = accounts.acquire(LANE);
             if (acquired == null || acquired.accountId == null || acquired.accountId.isEmpty()) {
                 int enabled = accounts.listEnabledCount();
-                // No ENABLED account at all -> retrying can never help, so a TERMINAL 400 (chatError,
-                // index.ts:93); accounts merely cooling down keep the retryable 503 (index.ts:94).
+                // No ENABLED account at all -> retrying can never help, so a TERMINAL 400 (chatError);
+                // accounts merely cooling down keep the retryable 503.
                 return enabled == 0
                         ? HandleDecision.synthetic(400, chatErrorHeaders(), chatErrorBody(NO_ACCOUNT_MESSAGE))
                         : HandleDecision.synthetic(503, plainJsonHeaders(), errorResponseBody(RATE_LIMITED_ALL_MESSAGE));
@@ -254,25 +244,25 @@ public final class ClaudeHandleOrchestrator {
             AttemptResult result = exec.execute(accountId, prepared);
 
             if (result.transportFailed) {
-                // index.ts:111-129, collapsed: the host already exhausted proxy + direct fetch and
-                // logged/reported the real per-branch error text itself (it alone has the Error
-                // object); this is the orchestrator's own bookkeeping call so account rotation still
-                // sees a reportError per failed attempt.
+                // Collapsed: the host already exhausted proxy + direct fetch and logged/reported
+                // the real per-branch error text itself (it alone has the Error object); this is
+                // the orchestrator's own bookkeeping call so account rotation still sees a
+                // reportError per failed attempt.
                 accounts.reportError(accountId, attempt, "transport failed");
                 continue;
             }
 
-            // index.ts:135 -- every non-transport-failed response, before any status branch.
+            // Every non-transport-failed response, before any status branch.
             accounts.captureQuota(accountId, result.headers);
 
             if (ClaudeModelRouting.isRateLimitStatus(result.status)) {
                 lastRef = result.attemptRef;
                 Long resetMs = AnthropicRequestTranslator.parseResetMs(result.headers, clock.now());
-                // T6a's parseResetMs deliberately drops request.ts:89-91's exponential-backoff
-                // fallback (it needs the cooldown config), returning null when neither the unified
-                // nor the retry-after header is present. The TS path NEVER passes null here -- it
-                // falls through to that backoff -- so replicate it inline to keep reportRateLimit
-                // byte-identical across paths (see computeBackoffResetMs).
+                // AnthropicRequestTranslator.parseResetMs deliberately does not implement the
+                // exponential-backoff fallback (it needs the cooldown config), returning null when
+                // neither the unified nor the retry-after header is present. The TS path falls
+                // through to that backoff in that case, so replicate it inline here (see
+                // computeBackoffResetMs) to keep reportRateLimit consistent across paths.
                 if (resetMs == null) resetMs = computeBackoffResetMs(attempt, cfg);
                 accounts.reportRateLimit(accountId, LANE, resetMs);
                 continue; // rotate account
@@ -286,7 +276,7 @@ public final class ClaudeHandleOrchestrator {
 
             if (result.status == 403) {
                 lastRef = result.attemptRef;
-                // index.ts:159 -- exact disabledReason string.
+                // Exact disabledReason string.
                 accounts.disable(accountId, DISABLED_REASON_403);
                 accounts.reportError(accountId, attempt, "403 scope");
                 continue;
@@ -300,8 +290,8 @@ public final class ClaudeHandleOrchestrator {
             return HandleDecision.serve(result.attemptRef); // non-retryable upstream error -- surface as-is
         }
 
-        // index.ts:176 -- serve the REAL upstream response (e.g. a genuine 429 with Anthropic's
-        // rate-limit headers) when one exists, rather than masking it with a synthetic error.
+        // Serve the REAL upstream response (e.g. a genuine 429 with Anthropic's rate-limit
+        // headers) when one exists, rather than masking it with a synthetic error.
         return lastRef != null
                 ? HandleDecision.serve(lastRef)
                 : HandleDecision.synthetic(502, plainJsonHeaders(),
@@ -309,8 +299,7 @@ public final class ClaudeHandleOrchestrator {
     }
 
     /**
-     * Exponential-backoff reset time (epoch ms) for a rate-limited response with NO reset header --
-     * the byte-exact port of request.ts:89-91:
+     * Exponential-backoff reset time (epoch ms) for a rate-limited response with NO reset header:
      * <pre>Date.now() + Math.min(getDefaultCooldownSeconds()*1000 * 2^attempt, getMaxCooldownSeconds()*1000)</pre>
      * Computed in {@code double} to mirror JS number arithmetic exactly, then floored to a long
      * epoch-ms; {@code Clock} supplies "now" (JS {@code Date.now()}) for test determinism.
@@ -318,7 +307,7 @@ public final class ClaudeHandleOrchestrator {
      * <p>core-auth's {@code RateLimitMath.calculateBackoffMs} is the CANONICAL backoff-math home,
      * but its formula intentionally DIFFERS from this one (it adds random jitter by default and
      * returns a relative DURATION, not an absolute epoch), so it cannot be reused here without
-     * breaking byte-parity with the TS {@code handle} path -- hence the inline replication.
+     * breaking parity with the TS {@code handle} path, hence the inline replication.
      */
     private long computeBackoffResetMs(int attempt, OrchestratorConfig cfg) {
         double raw = (double) cfg.defaultCooldownSeconds * 1000.0 * Math.pow(2, attempt);
@@ -326,7 +315,7 @@ public final class ClaudeHandleOrchestrator {
         return clock.now() + (long) capped;
     }
 
-    // ---- synthetic response bodies (core-auth src/errors.ts:13-34 / index.ts:35-40) -------------
+    // ---- synthetic response bodies ---------------------------------------------------------------
 
     private Map<String, String> plainJsonHeaders() {
         Map<String, String> h = new LinkedHashMap<>();

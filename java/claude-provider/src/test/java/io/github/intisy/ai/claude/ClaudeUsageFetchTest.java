@@ -21,12 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Typed-capability parity test of {@link ClaudeProvider#quota} (quota-display Task 1, migrated to
- * the {@link io.github.intisy.ai.shared.routing.QuotaProvider} SPI in E-C -- {@code handle()} no
- * longer answers {@code GET /v1/quota} at all, so the typed method is called directly). Mirrors
- * {@link ClaudeModelsFetchTest}'s harness: a scripted {@link HttpClient} injected via {@link
- * ClaudeBackend#forTest}/{@link ClaudeBackend#registerForTest} so the real provider is driven
- * end-to-end without any real network call.
+ * Typed-capability parity test of {@link ClaudeProvider#quota}, exercised via the {@link
+ * io.github.intisy.ai.shared.routing.QuotaProvider} SPI. Mirrors {@link ClaudeModelsFetchTest}'s
+ * harness: a scripted {@link HttpClient} injected via {@link ClaudeBackend#forTest}/{@link
+ * ClaudeBackend#registerForTest} so the real provider is driven end-to-end without any real
+ * network call.
  */
 class ClaudeUsageFetchTest {
 
@@ -164,7 +163,7 @@ class ClaudeUsageFetchTest {
         return null;
     }
 
-    /** {@code QuotaBar.resetTime} is ISO-8601 now (re-encoded from the old raw epoch-ms number). */
+    /** {@code QuotaBar.resetTime} is ISO-8601, re-encoded from a raw epoch-ms number. */
     private static String isoOf(String iso) {
         return java.time.Instant.parse(iso).toString();
     }

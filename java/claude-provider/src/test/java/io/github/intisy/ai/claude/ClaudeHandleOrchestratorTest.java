@@ -16,13 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Offline deterministic parity tests for {@link ClaudeHandleOrchestrator}, checked against
- * claude-code-auth's actual {@code handle} (src/driver/index.ts:72-177): the control flow was
- * reconstructed verbatim into a throwaway Node harness (module-level deps that stay TS --
- * {@code manager}/{@code proxyManager}/{@code getMaxAttempts}/{@code getAutoCandidates} --
- * injected via closures instead of the real imports) and driven with a scripted fake {@code
- * fetch} plus recording fakes for {@code manager}, executed with {@code node} (v26.3.1, same as
- * T6a) to snapshot the exact ordered call sequences and final response shapes asserted below --
- * not hand-derived from reading the TS alone. See task-6b-report.md for the harness.
+ * claude-code-auth's actual {@code handle} (mirrored from {@code src/driver/index.ts}): ordered
+ * call sequences and final response shapes are asserted against the TS driver's behavior for
+ * each scenario below.
  */
 class ClaudeHandleOrchestratorTest {
 
@@ -111,7 +107,7 @@ class ClaudeHandleOrchestratorTest {
         }
     }
 
-    // ---- scenarios (snapshotted from the Node harness, see task-6b-report.md) -----------------
+    // ---- scenarios ------------------------------------------------------------------------------
 
     @Test
     void happyPath_okOnAttempt0_reportSuccessAndServe() {
@@ -159,9 +155,10 @@ class ClaudeHandleOrchestratorTest {
 
     @Test
     void rateLimitWithNoResetHeader_appliesExponentialBackoff_byteMatchingRequestTs() {
-        // request.ts:89-91 fallback: a 429/529 with NO reset header -> reportRateLimit with
-        // Date.now() + min(defaultCooldown*1000 * 2^attempt, maxCooldown*1000). T6a's Java
-        // parseResetMs returns null here, so the orchestrator must supply this backoff itself.
+        // The TS driver's fallback: a 429/529 with NO reset header -> reportRateLimit with
+        // Date.now() + min(defaultCooldown*1000 * 2^attempt, maxCooldown*1000).
+        // AnthropicRequestTranslator.parseResetMs returns null here, so the orchestrator must
+        // supply this backoff itself.
         long now = 1_700_000_000_000L;
         RecordingAccountOps accounts = new RecordingAccountOps();
         accounts.enabledCount = 3;
@@ -219,7 +216,7 @@ class ClaudeHandleOrchestratorTest {
                 "captureQuota(acc3,{})",
                 "reportSuccess(acc3)"
         ), accounts.calls);
-        // disable must precede the NEXT acquire (index.ts:159 disables before rotating away).
+        // disable must precede the NEXT acquire (disables before rotating away).
         int disableIdx = accounts.calls.indexOf("disable(acc2,\"re-login required (token lacks inference scope)\")");
         int nextAcquireIdx = accounts.calls.indexOf("acquire(messages) -> acc3/tok3");
         assertTrue(disableIdx < nextAcquireIdx);
@@ -262,7 +259,7 @@ class ClaudeHandleOrchestratorTest {
         assertEquals("1", decision.headers.get("x-hub-chat-error"));
         assertEquals("application/json", decision.headers.get("content-type"));
         assertEquals("{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":" +
-                "\"No Claude account available — all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.\"}}",
+                "\"No Claude account available, all accounts are disabled or logged out. Run `cc auth` to add or re-enable one.\"}}",
                 decision.body);
     }
 

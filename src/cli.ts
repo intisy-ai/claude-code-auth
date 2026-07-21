@@ -16,7 +16,7 @@ async function main() {
   switch (command) {
     case "login":
       // `login` prompts for the code on the terminal; `login "<code#state>"`
-      // (or the full redirect URL) completes non-interactively — works in
+      // (or the full redirect URL) completes non-interactively, works in
       // containers with no usable browser loopback.
       await login({ log: (message) => process.stdout.write(message + "\n"), code: argument });
       return;

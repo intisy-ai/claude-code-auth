@@ -17,18 +17,18 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * TeaVM JS export surface over claude-code-auth's Java port (T6a + T6b) -- proves {@code
+ * TeaVM JS export surface over claude-code-auth's Java classes: proves {@code
  * AnthropicRequestTranslator}, {@code ClaudeQuotaParser}, {@code ClaudeModelRouting}, and {@code
  * ClaudeHandleOrchestrator} are ALL TeaVM-transpilable ({@code generateJavaScript} green),
  * mirroring stub-auth's {@code StubProviderJs} pattern. Lives in the SAME package ({@code
  * io.github.intisy.ai.js}) as core-proxy's {@code :teavm} module (a Gradle project dependency, see
  * {@code claude-teavm/build.gradle}), so {@code SimpleJsonCodec} is referenced unqualified exactly
- * like {@code CoreProxyJs}/{@code StubProviderJs} do -- NOT duplicated here.
+ * like {@code CoreProxyJs}/{@code StubProviderJs} do, not duplicated here.
  *
- * <p>Every export below calls straight into the JVM-side ported classes -- ONE Java method,
- * compiled twice (javac for {@code :claude-provider}'s jar, TeaVM for this module) -- so this is
- * a thin touch-surface, not a reimplementation. T6b does NOT wire this JS into claude-code-auth's
- * TS runtime (that's a later task) -- this module only proves transpilability.
+ * <p>Every export below calls straight into the JVM-side classes: ONE Java method, compiled
+ * twice (javac for {@code :claude-provider}'s jar, TeaVM for this module), so this is a thin
+ * touch-surface, not a reimplementation. This module only proves transpilability; it does not
+ * wire this JS into claude-code-auth's TS runtime.
  */
 public final class ClaudeProviderJs {
     private ClaudeProviderJs() {
@@ -41,12 +41,11 @@ public final class ClaudeProviderJs {
     }
 
     /**
-     * Exercises the SP-2 IR-based system-block injection under TeaVM: decodes an Anthropic
-     * request body through core-ir's {@link AnthropicTranslator}, applies
-     * {@link AnthropicRequestTranslator#ensureClaudeCodeSystemBlocks}, and re-encodes it --
-     * proving core-ir's translator (and this module's :ir dependency) is itself transpilable, not
-     * just {@code AnthropicRequestTranslator}'s own pure functions. Supersedes the old
-     * raw-JSON {@code ensureClaudeCodeSystemJson} export (its method was deleted).
+     * Exercises the IR-based system-block injection under TeaVM: decodes an Anthropic request
+     * body through core-ir's {@link AnthropicTranslator}, applies
+     * {@link AnthropicRequestTranslator#ensureClaudeCodeSystemBlocks}, and re-encodes it, proving
+     * core-ir's translator (and this module's :ir dependency) is itself transpilable, not just
+     * {@code AnthropicRequestTranslator}'s own pure functions.
      */
     @JSExport
     public static String ensureClaudeCodeSystemJson(String bodyJson) {
@@ -77,7 +76,7 @@ public final class ClaudeProviderJs {
         return parser.bucketOfLimitJson(limitJson);
     }
 
-    // ---- T6b: ClaudeModelRouting + ClaudeHandleOrchestrator ------------------------------------
+    // ---- ClaudeModelRouting + ClaudeHandleOrchestrator ---------------------------------------------
 
     /** Exercises {@link ClaudeModelRouting#isRateLimitStatus}. */
     @JSExport
@@ -164,19 +163,19 @@ public final class ClaudeProviderJs {
         return decision.body;
     }
 
-    // ---- T6c1: the production async entry (two-@Async composition) -----------------------------
+    // ---- the production async entry (two-@Async composition) ---------------------------------------
 
     /**
-     * THE T6c1 export the later live-rewire task (T6c2) will call: runs the FULL
-     * {@link ClaudeHandleOrchestrator#handle} decision loop with host transport + account rotation
-     * supplied as JS async/sync callbacks, and surfaces the whole (repeatedly-suspending) call
-     * graph to JS as ONE {@code Promise}. Inside the loop, EACH attempt suspends first on
-     * {@link JsAccountOpsBridge#acquire} (async) then on {@link JsAttemptExecutorBridge#execute}
-     * (async) -- two DISTINCT {@code @Async} bridges composing in one TeaVM CPS-transformed call
-     * graph, the mechanism this task de-risks. Built by hand as a {@code JSPromise} over a thread
-     * reaching the {@code @Async} boundaries (identical to {@code CoreProxyJs.routeJsonAsync}) --
-     * not {@code JSPromise.callAsync}, whose generic {@code resolve.accept} would leak a raw
-     * {@code jl_String} instead of a real JS string (see {@code JsHttpClientBridge.JsHttpSend}).
+     * Runs the FULL {@link ClaudeHandleOrchestrator#handle} decision loop with host transport +
+     * account rotation supplied as JS async/sync callbacks, and surfaces the whole
+     * (repeatedly-suspending) call graph to JS as ONE {@code Promise}. Inside the loop, EACH
+     * attempt suspends first on {@link JsAccountOpsBridge#acquire} (async) then on
+     * {@link JsAttemptExecutorBridge#execute} (async): two DISTINCT {@code @Async} bridges
+     * composing in one TeaVM CPS-transformed call graph. Built by hand as a {@code JSPromise}
+     * over a thread reaching the {@code @Async} boundaries (identical to {@code
+     * CoreProxyJs.routeJsonAsync}), not {@code JSPromise.callAsync}, whose generic {@code
+     * resolve.accept} would leak a raw {@code jl_String} instead of a real JS string (see
+     * {@code JsHttpClientBridge.JsHttpSend}).
      *
      * @param inputsJson {@code {url, method, headers:{}, bodyText, ctxModel?, topAutoCandidate?}}
      * @param configJson {@code {maxAttempts, defaultCooldownSeconds?, maxCooldownSeconds?}} (the
@@ -252,8 +251,8 @@ public final class ClaudeProviderJs {
             Map<?, ?> m = (Map<?, ?>) parsed;
             Object maxAttempts = m.get("maxAttempts");
             if (maxAttempts instanceof Number) cfg.maxAttempts = ((Number) maxAttempts).intValue();
-            // Cooldown config for the no-reset-header exponential backoff (request.ts:89-91). Absent
-            // -> OrchestratorConfig's settings.ts-matching defaults (60/900) stand.
+            // Cooldown config for the no-reset-header exponential backoff. Absent -> OrchestratorConfig's
+            // settings.ts-matching defaults (60/900) stand.
             Object defaultCooldown = m.get("defaultCooldownSeconds");
             if (defaultCooldown instanceof Number) cfg.defaultCooldownSeconds = ((Number) defaultCooldown).intValue();
             Object maxCooldown = m.get("maxCooldownSeconds");

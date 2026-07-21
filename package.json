@@ -1,7 +1,7 @@
 {
   "name": "claude-code-auth",
   "version": "2.3.0",
-  "description": "Claude Code subscription auth provider for OpenCode and Claude Code — multiple Claude accounts via OAuth, with subscription rate limits exposed to OpenCode.",
+  "description": "Claude Code subscription auth provider for OpenCode and Claude Code, multiple Claude accounts via OAuth, with subscription rate limits exposed to OpenCode.",
   "main": "dist/index.js",
   "type": "module",
   "license": "MIT",
@@ -48,15 +48,10 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@openauthjs/openauth": "^0.4.3",
-    "@opencode-ai/plugin": "^0.15.30",
-    "proper-lockfile": "^4.1.2",
-    "xdg-basedir": "^5.1.0",
-    "zod": "^4.0.0"
+    "@openauthjs/openauth": "^0.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.19.19",
-    "@types/proper-lockfile": "^4.1.4",
     "esbuild": "^0.25.12",
     "typescript": "^5.0.0",
     "vitest": "^4.1.7"

@@ -14,30 +14,26 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Java port of claude-code-auth's original {@code src/plugin/request.ts} (Bucket A of
- * {@code .superpowers/port-grounding-map.md}; the TS file itself was DELETED in SP-2 -- it had
- * become dead code, superseded by this class): {@code mergeBeta}, {@code prepareClaudeRequest},
- * and the HEADER-PARSE half of {@code parseResetMs}. The exponential-backoff fallback branch of
- * {@code parseResetMs} (request.ts:89-91) is DELIBERATELY DROPPED here -- it reads
- * {@code getDefaultCooldownSeconds()}/{@code getMaxCooldownSeconds()} from core's config store
- * (Bucket B I/O), and belongs to core-auth's {@code RateLimitMath} instead. This class returns
- * {@code null} from {@link #parseResetMs} where the TS would have fallen through to that branch;
- * the caller is expected to invoke {@code RateLimitMath} in that case.
+ * {@code mergeBeta}, {@code prepareClaudeRequest}, and the HEADER-PARSE half of
+ * {@code parseResetMs} for the Claude/Anthropic upstream. The exponential-backoff fallback
+ * branch of {@code parseResetMs} is DELIBERATELY not implemented here: it reads
+ * {@code getDefaultCooldownSeconds()}/{@code getMaxCooldownSeconds()} from core's config store,
+ * which belongs to core-auth's {@code RateLimitMath} instead. This class returns {@code null}
+ * from {@link #parseResetMs} in that case; the caller is expected to invoke
+ * {@code RateLimitMath}.
  *
- * <p><b>SP-2 (core-ir):</b> {@code prepareClaudeRequest} used to hand-rewrite the parsed request
- * body's {@code system} field directly on the raw JSON {@code Map} tree ({@code
- * ensureClaudeCodeSystem}, now DELETED). It now round-trips the body through core-ir instead --
- * {@code AnthropicTranslator.decodeRequest} (inbound Anthropic wire -&gt; {@link IrRequest}),
- * {@link #ensureClaudeCodeSystemBlocks} (the identity-block dedup/prepend, now operating on
+ * <p>{@code prepareClaudeRequest} round-trips the body through core-ir: {@code
+ * AnthropicTranslator.decodeRequest} (inbound Anthropic wire to {@link IrRequest}),
+ * {@link #ensureClaudeCodeSystemBlocks} (the identity-block dedup/prepend, operating on
  * {@code IrRequest.system}'s neutral {@link Block} list), then {@code encodeRequest} back to the
  * Anthropic body actually sent upstream. Since claude's upstream IS Anthropic, this is an IR
- * round trip on the SAME vendor format -- semantically lossless (core-ir's extensions bags carry
+ * round trip on the SAME vendor format, semantically lossless (core-ir's extensions bags carry
  * anything with no neutral IR home), though the re-encoded JSON's key order can differ from the
- * original (never wire-significant). Bearer/anthropic-version/anthropic-beta headers stay
- * provider-own upstream-auth concerns, applied to the encoded body exactly as before -- NOT
- * format translation, so they are untouched by this migration.
+ * original (never wire-significant). Bearer/anthropic-version/anthropic-beta headers are
+ * provider-own upstream-auth concerns, applied to the encoded body directly, not format
+ * translation.
  *
- * <p>Only the {@link JsonCodec} SPI is used (to parse/stringify the request body) -- no
+ * <p>Only the {@link JsonCodec} SPI is used (to parse/stringify the request body): no
  * HttpClient/Store, no gson/java.net/java.nio/reflection/threads/System.getenv, so this class is
  * TeaVM-transpilable (see {@code :claude-teavm}).
  */
@@ -51,20 +47,16 @@ public final class AnthropicRequestTranslator {
     private AnthropicRequestTranslator() {
     }
 
-    // ---- ensureClaudeCodeSystemBlocks (request.ts:16-30, ported to the IR for SP-2) ------------
+    // ---- ensureClaudeCodeSystemBlocks -----------------------------------------------------------
 
     /**
      * Ensures {@code system} starts with the Claude-Code identity block, without duplicating it
-     * if already present -- the IR-level replacement for the old raw-JSON {@code
-     * ensureClaudeCodeSystem}. Once normalized into core-ir's neutral {@link Block} list, the
-     * original three-way TS/JSON branch (string / array / else, since JS distinguishes {@code
-     * typeof} string from {@code Array.isArray}) collapses into ONE rule: a bare wire string and
-     * a single-element wire array decode to the IDENTICAL one-{@link TextBlock} shape, so the
-     * same "does it already start with the identity block" check handles every case correctly --
-     * absent/{@code null}/non-string-non-array system, an empty array, a plain string, and a
-     * block array all decode through {@code AnthropicRequestCodec} to either {@code null}/empty
-     * or a {@code List<Block>}, verified against every case the deleted method's own unit tests
-     * covered.
+     * if already present. Once normalized into core-ir's neutral {@link Block} list, a bare wire
+     * string and a single-element wire array decode to the IDENTICAL one-{@link TextBlock} shape,
+     * so a single "does it already start with the identity block" check handles every case
+     * correctly: absent/{@code null}/non-string-non-array system, an empty array, a plain
+     * string, and a block array all decode through {@code AnthropicRequestCodec} to either
+     * {@code null}/empty or a {@code List<Block>}.
      *
      * @return {@code [identity]} when {@code system} is {@code null}/empty; {@code system}
      *     unchanged when it already starts with the identity block; otherwise the identity block
@@ -83,8 +75,7 @@ public final class AnthropicRequestTranslator {
                 // any real cache_control it carries is preserved untouched -- so the encode side
                 // can never collapse it back into a bare wire STRING. Relevant when the inbound
                 // wire `system` was itself the identity string verbatim, which core-ir's
-                // AnthropicTranslator would otherwise reproduce as a string (a valid but different
-                // wire shape than the original ad hoc code's "always an array" behavior). Safe: a
+                // AnthropicTranslator would otherwise reproduce as a string. Safe: a
                 // block only looks "plain" (no cache_control, no extensions) if it came from a
                 // bare string OR a metadata-free single-element array -- in both cases there is
                 // nothing to lose; a block with a REAL cache_control already has extensions==null
@@ -110,19 +101,18 @@ public final class AnthropicRequestTranslator {
         return t;
     }
 
-    // ---- mergeBeta (request.ts:32-35) --------------------------------------------------------
+    // ---- mergeBeta ------------------------------------------------------------------------------
 
     /** Appends {@link #ANTHROPIC_OAUTH_BETA} to an existing header value, deduped by substring. */
     public static String mergeBeta(String existing) {
         if (JsCoercion.isFalsyString(existing)) return ANTHROPIC_OAUTH_BETA;
-        // Matches the TS `existing.includes(...)` literally: a SUBSTRING match, not a
-        // comma-list-membership check -- e.g. existing="foo-oauth-2025-04-20-bar" is treated as
-        // already containing the beta flag and left unchanged. Ambiguous but intentional per the
-        // TS source; not "improved" here.
+        // A SUBSTRING match, not a comma-list-membership check: e.g.
+        // existing="foo-oauth-2025-04-20-bar" is treated as already containing the beta flag and
+        // left unchanged. Ambiguous but intentional; not "improved" here.
         return existing.contains(ANTHROPIC_OAUTH_BETA) ? existing : existing + "," + ANTHROPIC_OAUTH_BETA;
     }
 
-    // ---- prepareClaudeRequest (request.ts:38-75) ----------------------------------------------
+    // ---- prepareClaudeRequest --------------------------------------------------------------------
 
     /** Mirrors the TS {@code init} shape: {@code {method, headers, body}}. */
     public static final class RequestInit {
@@ -145,7 +135,7 @@ public final class AnthropicRequestTranslator {
      * Rewrites an inbound request onto the Anthropic API: strips/rewrites headers, sets
      * {@code Authorization: Bearer <access>}, resolves the request path, injects the
      * Claude-Code system block into a JSON body, and strips the body for GET/HEAD (Node's undici
-     * rejects any body on those methods, unlike Bun -- request.ts:64-65).
+     * rejects any body on those methods, unlike Bun).
      *
      * @param json   used to parse/stringify the (optional) JSON body -- the only SPI this class
      *               needs.
@@ -176,11 +166,9 @@ public final class AnthropicRequestTranslator {
             }
             // Only a genuine JSON object round-trips through the IR (an Anthropic Messages
             // request body always is one); malformed JSON, or a truthy non-object (an
-            // unreachable-in-practice shape for this endpoint -- e.g. a bare JSON number), is
+            // unreachable-in-practice shape for this endpoint, e.g. a bare JSON number), is
             // left as the ORIGINAL bytes verbatim rather than fabricating IR structure that was
-            // never there. (The old code still re-stringified a truthy non-object via
-            // ensureClaudeCodeSystem's no-op passthrough + json.stringify; skipping that here is
-            // an idempotent no-op difference for realistic inputs, not a behavior change.)
+            // never there.
             if (parsed instanceof Map) {
                 io.github.intisy.ai.ir.spi.JsonCodec irJson = new IrJsonCodecAdapter(json);
                 AnthropicTranslator translator = new AnthropicTranslator(irJson);
@@ -246,14 +234,13 @@ public final class AnthropicRequestTranslator {
         return path.isEmpty() ? "/v1/messages" : path;
     }
 
-    // ---- parseResetMs, HEADER-PARSE HALF ONLY (request.ts:78-88) -------------------------------
+    // ---- parseResetMs, HEADER-PARSE HALF ONLY ----------------------------------------------------
 
     /**
      * Reads the rate-limit reset (epoch ms) from response headers: the unified reset header
      * first, then {@code retry-after}. Returns {@code null} when NEITHER header yields a usable
-     * value -- the TS instead falls through to an exponential-backoff fallback (request.ts:89-91)
-     * that this port deliberately does NOT reimplement (see class javadoc); the caller must
-     * invoke core-auth's {@code RateLimitMath} for that case.
+     * value; that case needs the exponential-backoff fallback deliberately not implemented here
+     * (see class javadoc), so the caller must invoke core-auth's {@code RateLimitMath} instead.
      *
      * @param headers   response headers, looked up case-insensitively (matches the Fetch
      *                  {@code Headers} object's case-insensitive {@code get}).

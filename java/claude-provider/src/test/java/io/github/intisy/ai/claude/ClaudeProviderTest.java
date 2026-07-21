@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link HttpClient} injected into the backend via {@link ClaudeBackend#forTest}/{@link
  * ClaudeBackend#registerForTest} (mirrors antigravity-auth's {@code AntigravityServePathTest}),
  * so the orchestrator's retry/rotation/synthetic-response behavior is exercised end-to-end
- * without any real network call. The provider is IR-native only (T4): a 2xx serve returns an
+ * without any real network call. The provider is IR-native only: a 2xx serve returns an
  * {@link IrResponse}; every non-2xx or synthetic outcome throws {@link HandleIrException}.
  */
 class ClaudeProviderTest {
@@ -133,7 +133,7 @@ class ClaudeProviderTest {
         assertEquals("msg_1", response.id);
 
         // The IR-native path builds bodyText from the IrRequest, then prepareClaudeRequest stamps
-        // the same Claude-Code OAuth identity on the outbound upstream request as before.
+        // the same Claude-Code OAuth identity on the outbound upstream request.
         assertEquals(1, http.requests.size());
         HttpRequest sent = http.requests.get(0);
         assertEquals("https://api.anthropic.com/v1/messages", sent.url);
@@ -230,7 +230,7 @@ class ClaudeProviderTest {
         assertTrue(inStore, "the account must live in the injected store, proving the provider used it");
     }
 
-    // ---- SP-3 T2: handleIr ---------------------------------------------------------------------
+    // ---- handleIr -------------------------------------------------------------------------------
 
     @Test
     void handleIr_happyPath_decodesUpstreamMessageIntoIrResponse(@TempDir Path configDir) throws Exception {
@@ -251,8 +251,8 @@ class ClaudeProviderTest {
         assertTrue(response.content.get(0) instanceof TextBlock);
         assertEquals("hi", ((TextBlock) response.content.get(0)).text);
         assertEquals(1, http.requests.size());
-        // The IR-native path builds its own bodyText from the IrRequest -- prepareClaudeRequest
-        // still stamps the Claude-Code identity system block and OAuth headers, exactly as handle().
+        // The IR-native path builds its own bodyText from the IrRequest; prepareClaudeRequest
+        // still stamps the Claude-Code identity system block and OAuth headers.
         assertTrue(http.requests.get(0).headers.get("authorization").startsWith("Bearer "));
     }
 
@@ -264,7 +264,7 @@ class ClaudeProviderTest {
         HandlerCtx ctx = new HandlerCtx();
         ctx.configDir = configDir.toString();
 
-        // T3c-2: a non-2xx upstream response is not Anthropic MESSAGE-shaped JSON and must not be
+        // A non-2xx upstream response is not Anthropic MESSAGE-shaped JSON and must not be
         // coerced through decodeResponse -- handleIr throws the canonical HandleIrException instead,
         // carrying the real upstream status/body verbatim (so core-proxy's front door can restore
         // status fidelity instead of collapsing to a flat 502).
@@ -281,7 +281,7 @@ class ClaudeProviderTest {
         HandlerCtx ctx = new HandlerCtx();
         ctx.configDir = configDir.toString();
 
-        // T3c-2: a SYNTHETIC decision's body (no-account/exhaustion) is not guaranteed to be
+        // A SYNTHETIC decision's body (no-account/exhaustion) is not guaranteed to be
         // Anthropic MESSAGE-shaped JSON and must not be coerced through decodeResponse -- handleIr
         // throws the canonical HandleIrException, carrying this provider's own synthesized
         // status/body through unchanged.

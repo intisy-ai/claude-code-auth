@@ -13,17 +13,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Model-map Task 1: {@code GET /v1/models} discovery fetch for the example-server dashboard.
- * Java port of the HOST-I/O half of claude-code-auth's TS {@code fetchModels} (see
- * {@code src/driver/index.ts:197-224}) -- the MAPPING half is already ported as {@link
- * ClaudeModelRouting#fetchModelsMapping}, which this class feeds with the raw upstream body.
+ * {@code GET /v1/models} discovery fetch for the example-server dashboard. Performs the host-I/O;
+ * the mapping half is implemented
+ * as {@link ClaudeModelRouting#fetchModelsMapping}, which this class feeds with the raw upstream
+ * body.
  *
  * <p>Deliberately uses {@link io.github.intisy.ai.shared.manager.AccountManager#ensureAccess}
  * (no rotation/lane-claim side effects), matching the TS, which never calls {@code acquire} just
  * to list models. {@link #models} never throws: every failure path (no account, refresh failure,
- * network failure, non-2xx upstream, empty mapping) folds into an empty list -- the typed {@link
+ * network failure, non-2xx upstream, empty mapping) folds into an empty list; the typed {@link
  * io.github.intisy.ai.shared.routing.ModelCatalogProvider#models} contract has no error shape to
- * carry a reason, unlike the retired {@code GET /v1/models} HttpResponse branch this replaces.
+ * carry a reason.
  */
 final class ClaudeModelsFetch {
 
@@ -94,8 +94,8 @@ final class ClaudeModelsFetch {
                 Object n = ((Map<String, Object>) entryObj).get("name");
                 if (n instanceof String) name = (String) n;
             }
-            // context/output were never part of the pre-migration wire shape (fetchModelsMapping
-            // only ever set "name") -- 0 is not a loss, just an absent upstream value.
+            // context/output are not part of fetchModelsMapping's wire shape (it only ever sets
+            // "name"); 0 is not a loss, just an absent upstream value.
             out.add(new ModelInfo(id, name, 0, 0));
         }
         return out;
