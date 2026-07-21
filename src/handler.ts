@@ -9,3 +9,10 @@ export const handleIr = driver.handleIr; // IR-native serving path (front-door o
 export const accounts = driver.accounts;
 export const menu = () => runProviderMenu(driver);
 export const menuModel = () => buildAccountMenu(driver);   // opencode loader renders this natively in-tab
+export const def = {
+  id: driver.id,
+  label: driver.label,
+  models: driver.models,
+  hasOAuth: typeof driver.loginFlow === "function",
+  settings: driver.settings,
+};
