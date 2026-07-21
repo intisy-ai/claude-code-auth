@@ -137,10 +137,9 @@ class AnthropicRequestTranslatorTest {
     }
 
     @Test
-    void mergeBeta_substringMatch_leftUnchanged_matchesTsIncludesLiterally() {
-        // TS uses `existing.includes(BETA)`, a substring check, not comma-list membership.
-        // "foo-oauth-2025-04-20-bar" is (arguably incorrectly) treated as already containing the
-        // flag. Matched literally, not "improved".
+    void mergeBeta_substringMatch_leftUnchanged() {
+        // mergeBeta uses a substring check (existing.contains(BETA)), not comma-list membership, so
+        // "foo-oauth-2025-04-20-bar" is (arguably incorrectly) treated as already containing the flag.
         assertEquals("foo-oauth-2025-04-20-bar", AnthropicRequestTranslator.mergeBeta("foo-oauth-2025-04-20-bar"));
     }
 

@@ -300,14 +300,13 @@ public final class ClaudeHandleOrchestrator {
 
     /**
      * Exponential-backoff reset time (epoch ms) for a rate-limited response with NO reset header:
-     * <pre>Date.now() + Math.min(getDefaultCooldownSeconds()*1000 * 2^attempt, getMaxCooldownSeconds()*1000)</pre>
-     * Computed in {@code double} to mirror JS number arithmetic exactly, then floored to a long
-     * epoch-ms; {@code Clock} supplies "now" (JS {@code Date.now()}) for test determinism.
+     * <pre>now + Math.min(getDefaultCooldownSeconds()*1000 * 2^attempt, getMaxCooldownSeconds()*1000)</pre>
+     * Computed in {@code double} then floored to a long epoch-ms; {@code Clock} supplies "now" for
+     * test determinism.
      *
-     * <p>core-auth's {@code RateLimitMath.calculateBackoffMs} is the CANONICAL backoff-math home,
-     * but its formula intentionally DIFFERS from this one (it adds random jitter by default and
-     * returns a relative DURATION, not an absolute epoch), so it cannot be reused here without
-     * breaking parity with the TS {@code handle} path, hence the inline replication.
+     * <p>core-auth's {@code RateLimitMath.calculateBackoffMs} is the canonical backoff-math home,
+     * but its formula intentionally differs (it adds random jitter by default and returns a relative
+     * DURATION, not an absolute epoch), so it cannot be reused here; hence the inline replication.
      */
     private long computeBackoffResetMs(int attempt, OrchestratorConfig cfg) {
         double raw = (double) cfg.defaultCooldownSeconds * 1000.0 * Math.pow(2, attempt);
