@@ -8,14 +8,13 @@ import io.github.intisy.ai.shared.spi.http.HttpResponse;
 import java.util.Map;
 
 /**
- * JVM host implementations of the two seams {@link ClaudeHandleOrchestrator} needs (Phase 6, see
- * {@code .superpowers/sdd/phase-6-brief.md}): adapts {@link ClaudeBackend}'s core-auth {@code
- * AccountManager}/{@code AccountStore} to {@code AccountOps}, and runs one attempt via {@code
- * HttpClient} as {@code AttemptExecutor}. Claude needs only these two seams -- unlike
- * antigravity-auth's seven (no RequestPreparer: the orchestrator builds the {@code
- * PreparedRequest} itself via {@code AnthropicRequestTranslator}; no model-cache/project seams:
- * Claude has no Gemini-style onboarding). No decision logic lives here, only host I/O + shape
- * adaptation.
+ * JVM host implementations of the two seams {@link ClaudeHandleOrchestrator} needs: adapts
+ * {@link ClaudeBackend}'s core-auth {@code AccountManager}/{@code AccountStore} to {@code
+ * AccountOps}, and runs one attempt via {@code HttpClient} as {@code AttemptExecutor}. Claude
+ * needs only these two seams -- unlike antigravity-auth's seven (no RequestPreparer: the
+ * orchestrator builds the {@code PreparedRequest} itself via {@code AnthropicRequestTranslator};
+ * no model-cache/project seams: Claude has no Gemini-style onboarding). No decision logic lives
+ * here, only host I/O + shape adaptation.
  */
 final class ClaudeHostSeams {
 
@@ -89,8 +88,8 @@ final class ClaudeHostSeams {
 
         @Override
         public void captureQuota(String accountId, Map<String, String> headers) {
-            // MVP no-op: quota capture/display is the later provider-management-UI sub-project.
-            // The serve + rate-limit path does not need it (see phase-6 brief, decisions section).
+            // No-op: quota capture/display is out of scope here; the serve + rate-limit path
+            // does not need it.
         }
     }
 

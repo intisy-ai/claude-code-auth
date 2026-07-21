@@ -18,20 +18,16 @@ import java.util.Map;
 /**
  * JVM-only OAuth side-path for the Claude provider (mirrors {@link ClaudeModelsFetch}'s shape):
  * builds the real claude.ai authorize URL (PKCE S256, verifier packed into {@code state}) and
- * ports {@code authorizeClaude}/{@code encodeState}/{@code decodeState}/{@code exchangeClaude}
- * verbatim from {@code providers/claude-code-auth/src/oauth/oauth.ts} +
- * {@code src/constants.ts}. Claude is a PUBLIC client -- no secret. Never logs
- * code/verifier/state/tokens.
+ * mirrors {@code authorizeClaude}/{@code encodeState}/{@code decodeState}/{@code exchangeClaude}
+ * from {@code src/oauth/oauth.ts} + {@code src/constants.ts}. Claude is a PUBLIC client, no
+ * secret. Never logs code/verifier/state/tokens.
  *
  * <p>{@link #authorizeInfo()}/{@link #exchangeValues} are the typed {@link
  * io.github.intisy.ai.shared.routing.OAuthProvider} entry points {@link ClaudeProvider} delegates
- * to. There is no HttpResponse wrapper anymore -- nothing but the retired {@code GET/POST
- * /v1/oauth/*} branches ever called the old {@code authorize()}/{@code exchange()} methods.
- * {@code exchangeValues} throws {@link IllegalStateException} on any failure (missing PKCE
+ * to. {@code exchangeValues} throws {@link IllegalStateException} on any failure (missing PKCE
  * verifier, token-exchange transport/HTTP failure, missing refresh token) since the typed {@code
- * Map<String,Object> exchange(...)} contract has no status/error-body shape to carry a reason in
- * -- the caller (e.g. the dashboard's OAuth admin) catches and translates, the same way it already
- * catches {@code handler.handle()} exceptions today.
+ * Map<String,Object> exchange(...)} contract has no status/error-body shape to carry a reason;
+ * the caller (e.g. the dashboard's OAuth admin) catches and translates it.
  */
 final class ClaudeOAuth {
     private static final String AUTHORIZE_URL = "https://claude.ai/oauth/authorize";

@@ -15,10 +15,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Quota-display Task 1: {@code GET /v1/quota} per-account usage fetch for the example-server
- * dashboard. Java port of the HOST-I/O half of claude-code-auth's TS {@code fetchUsagePools} (see
- * {@code src/driver/accounts-controller.ts:71-89}) -- the bucketing/labeling half is already
- * ported as {@link ClaudeQuotaParser}, which this class feeds with the raw upstream limits.
+ * {@code GET /v1/quota} per-account usage fetch for the example-server dashboard. Java port of
+ * the HOST-I/O half of claude-code-auth's TS {@code fetchUsagePools} (see {@code
+ * src/driver/accounts-controller.ts}); the bucketing/labeling half is implemented as
+ * {@link ClaudeQuotaParser}, which this class feeds with the raw upstream limits.
  *
  * <p>Unlike {@link ClaudeModelsFetch} (single first-enabled-account discovery), this fetches usage
  * for EVERY enabled account and persists each one's pools to {@code meta.cachedQuota} so the
@@ -123,9 +123,9 @@ final class ClaudeUsageFetch {
         return remainingFraction instanceof Number ? ((Number) remainingFraction).doubleValue() : 0.0;
     }
 
-    // The pre-migration wire shape carried resetTime as a raw epoch-ms number (see epochMs()
-    // below); QuotaBar.resetTime is a String on the typed SPI, so re-encode the SAME instant as
-    // ISO-8601 rather than dropping it -- a lossless format change, not a dropped field.
+    // QuotaBar.resetTime is a String on the typed SPI, while epochMs() below yields a raw epoch-ms
+    // number; re-encode the SAME instant as ISO-8601 rather than dropping it, a lossless format
+    // change, not a dropped field.
     private static String isoResetTime(Object resetTimeEpochMs) {
         return resetTimeEpochMs instanceof Number
                 ? Instant.ofEpochMilli(((Number) resetTimeEpochMs).longValue()).toString()
@@ -143,7 +143,7 @@ final class ClaudeUsageFetch {
         return req;
     }
 
-    // TS fetchUsagePools body.limits[] loop (accounts-controller.ts:71-89): bucket a limit via
+    // TS fetchUsagePools body.limits[] loop (accounts-controller.ts): bucket a limit via
     // ClaudeQuotaParser.bucketOfLimit, skip anything without a bucket or a numeric percent.
     @SuppressWarnings("unchecked")
     private static Map<String, Object> parsePools(ClaudeBackend backend, String body) {

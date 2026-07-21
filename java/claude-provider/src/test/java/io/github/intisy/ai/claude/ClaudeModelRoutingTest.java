@@ -11,10 +11,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Offline deterministic parity tests for {@link ClaudeModelRouting}, checked against
  * claude-code-auth's actual {@code src/driver/index.ts} behavior: {@code isRateLimitStatus},
- * {@code resolveAutoModel}, {@code applyAssignedModel} and the mapping half of {@code
- * fetchModels} were extracted verbatim into a throwaway Node harness and executed with {@code
- * node} (v26.3.1, same as T6a) to snapshot the exact expected values used below -- not
- * hand-derived from reading the source. See task-6b-report.md for the harness.
+ * {@code resolveAutoModel}, {@code applyAssignedModel}, and the mapping half of {@code
+ * fetchModels}.
  */
 class ClaudeModelRoutingTest {
 

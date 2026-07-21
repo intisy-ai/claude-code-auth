@@ -17,9 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Typed-capability parity test of {@link ClaudeOAuth#authorizeInfo()}/{@link
- * ClaudeOAuth#exchangeValues} -- the typed {@link io.github.intisy.ai.shared.routing.OAuthProvider}
- * entry points that replace the retired {@code GET /v1/oauth/authorize}/{@code POST
- * /v1/oauth/exchange} HttpResponse branches.
+ * ClaudeOAuth#exchangeValues}, the typed {@link io.github.intisy.ai.shared.routing.OAuthProvider}
+ * entry points.
  */
 class ClaudeOAuthTest {
 

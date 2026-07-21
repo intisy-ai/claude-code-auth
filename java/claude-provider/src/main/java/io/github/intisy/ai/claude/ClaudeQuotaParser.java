@@ -12,11 +12,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Java port of claude-code-auth's {@code src/driver/accounts-controller.ts} (Bucket A of
- * {@code .superpowers/port-grounding-map.md}): {@code readPools}, {@code bucketOfLimit},
- * {@code poolLabel}, {@code claudeQuota}, and {@code accountHasQuota}. The I/O-bound siblings
- * ({@code captureQuota}, {@code fetchUsagePools}, {@code refreshQuota*}, {@code verify*}) stay in
- * TS (Bucket B, HttpClient/Store) -- out of scope here.
+ * Pure-logic mirror of claude-code-auth's {@code src/driver/accounts-controller.ts}: {@code
+ * readPools}, {@code bucketOfLimit}, {@code poolLabel}, {@code claudeQuota}, and {@code
+ * accountHasQuota}. The I/O-bound siblings ({@code captureQuota}, {@code fetchUsagePools},
+ * {@code refreshQuota*}, {@code verify*}) stay in TS (HttpClient/Store), out of scope here.
  *
  * <p>The core logic works over plain {@code Map}/{@code List} JSON trees (the shape both gson and
  * {@link JsonCodec} produce) so it is TeaVM-transpilable on its own; the instance methods taking
@@ -25,13 +24,13 @@ import java.util.regex.Pattern;
  */
 public final class ClaudeQuotaParser {
 
-    // accounts-controller.ts:20 -- discovers "anthropic-ratelimit-unified-{pool}-{field}" header
+    // accounts-controller.ts discovers "anthropic-ratelimit-unified-{pool}-{field}" header
     // triples; the bucketless "anthropic-ratelimit-unified-reset" lane-timing header does NOT
     // match (no hyphen-separated pool component for (.+) to capture before the trailing field).
     private static final Pattern UNIFIED_POOL_HEADER =
             Pattern.compile("^anthropic-ratelimit-unified-(.+)-(utilization|reset|status)$");
 
-    // accounts-controller.ts:94 -- "5h" -> ("5","h",null); "7d-fable"/"7d_fable" -> ("7","d","fable").
+    // accounts-controller.ts: "5h" -> ("5","h",null); "7d-fable"/"7d_fable" -> ("7","d","fable").
     private static final Pattern BUCKET_LABEL = Pattern.compile("^(\\d+)([hd])(?:[-_](.+))?$");
 
     private final JsonCodec json;
@@ -40,7 +39,7 @@ public final class ClaudeQuotaParser {
         this.json = json;
     }
 
-    // ---- readPools (accounts-controller.ts:22-36) ---------------------------------------------
+    // ---- readPools (accounts-controller.ts) ------------------------------------------------------
 
     /**
      * Discovers unified rate-limit pools from response headers. Header names are matched
@@ -88,7 +87,7 @@ public final class ClaudeQuotaParser {
         return pools;
     }
 
-    // ---- bucketOfLimit (accounts-controller.ts:56-65) ------------------------------------------
+    // ---- bucketOfLimit (accounts-controller.ts) --------------------------------------------------
 
     /**
      * Canonical bucket key for one entry of the {@code /api/oauth/usage} endpoint's
@@ -135,7 +134,7 @@ public final class ClaudeQuotaParser {
         return String.valueOf(scope).toLowerCase().replaceAll("\\s+", "-");
     }
 
-    // ---- poolLabel (accounts-controller.ts:93-98) ---------------------------------------------
+    // ---- poolLabel (accounts-controller.ts) ------------------------------------------------------
 
     /**
      * Bucket key -&gt; human label: {@code "5h"} -&gt; {@code "5-hour"}, {@code "7d"} -&gt;
@@ -159,7 +158,7 @@ public final class ClaudeQuotaParser {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
-    // ---- claudeQuota (accounts-controller.ts:101-112) ------------------------------------------
+    // ---- claudeQuota (accounts-controller.ts) ------------------------------------------------------
 
     /**
      * Maps a stored account's cached pools to core-auth's quota shape:
@@ -211,7 +210,7 @@ public final class ClaudeQuotaParser {
         out.add(entry);
     }
 
-    // ---- accountHasQuota (accounts-controller.ts:208-213) --------------------------------------
+    // ---- accountHasQuota (accounts-controller.ts) --------------------------------------------------
 
     /** True if any cached pool has a numeric utilization below 1. Unknown/missing -&gt; false. */
     @SuppressWarnings("unchecked")

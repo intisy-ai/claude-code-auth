@@ -13,21 +13,19 @@ import java.util.Map;
 
 /**
  * JVM-only config side-path for the Claude provider (mirrors {@link ClaudeOAuth}'s shape):
- * exposes the 5 real settings registered by {@code defineConfig("claude-code", …)} in
- * {@code src/index.ts:13-19}, with working GET (merged defaults + persisted overrides) and
- * PUT (validate/coerce + persist) against the backend {@link io.github.intisy.ai.shared.spi.Store}
- * under the SAME key name the TS driver's settings.ts reads ({@code config/claude-code.json}),
- * so JVM and TS share one on-disk config file.
+ * exposes the 5 real settings registered by {@code defineConfig("claude-code", …)}, with working
+ * GET (merged defaults + persisted overrides) and PUT (validate/coerce + persist) against the
+ * backend {@link io.github.intisy.ai.shared.spi.Store} under the SAME key name the TS driver's
+ * settings.ts reads ({@code config/claude-code.json}), so JVM and TS share one on-disk config
+ * file.
  *
  * <p>Exposes the typed {@link io.github.intisy.ai.shared.routing.ConfigurableProvider} shape
  * ({@link #schema()}/{@link #values}/{@link #putValues}) that {@link ClaudeProvider} implements
- * directly -- there is no HttpResponse/JSON wrapper here since nothing else (TeaVM export surface,
- * TS driver) ever called the old {@code GET/PUT /v1/config} branch; those lived ONLY in {@code
- * ClaudeProvider#handle}'s retired URL branches. {@code type} strings use the SPI/dashboard
- * vocabulary ({@code bool}/{@code select}/{@code number}/{@code text}) exactly -- the example-server
- * grouped-config renderer branches STRICTLY on those tokens (anything else falls through to a plain
- * text input), so the pre-migration internal tokens {@code "boolean"}/{@code "enum"} would have made
- * Logging render as a text box and Account-selection as a text box instead of a checkbox/dropdown.
+ * directly. {@code type} strings use the SPI/dashboard vocabulary ({@code bool}/{@code
+ * select}/{@code number}/{@code text}) exactly: the example-server grouped-config renderer
+ * branches STRICTLY on those tokens (anything else falls through to a plain text input), so a
+ * different token (e.g. {@code "boolean"}/{@code "enum"}) would make Logging render as a text box
+ * and Account-selection as a text box instead of a checkbox/dropdown.
  */
 final class ClaudeConfig {
 
@@ -68,8 +66,7 @@ final class ClaudeConfig {
 
     /**
      * {@link io.github.intisy.ai.shared.routing.ConfigurableProvider#putConfigValues}: {@code
-     * incoming} is already a parsed values map (the caller owns request-body JSON parsing now --
-     * that concern moved out of this provider with the retired {@code PUT /v1/config} branch).
+     * incoming} is already a parsed values map; the caller owns request-body JSON parsing.
      * Only known keys are ever written; the store keeps overrides only (not baked-in defaults), so
      * a field never explicitly set stays absent and future default changes still take effect for
      * it. An invalid/unknown value (e.g. an enum outside its options) is ignored rather than

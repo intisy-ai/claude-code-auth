@@ -14,14 +14,15 @@ import org.teavm.jso.core.JSString;
 import java.util.Map;
 
 /**
- * Second of the two async JS bridges T6c1 proves compose: a {@link ClaudeHandleOrchestrator.AccountOps}
- * whose ONE async operation ({@code manager.acquire(lane)}, index.ts:85) is bridged with a SECOND
- * {@code @Async} native method + {@link AsyncCallback} -- distinct from
- * {@link JsAttemptExecutorBridge}'s, but in the SAME CPS-transformed call graph (the orchestrator's
- * retry loop does {@code acquire} then {@code execute} then {@code acquire} then {@code execute}...).
- * The SYNCHRONOUS ops ({@code reportError}/{@code reportRateLimit}/{@code reportSuccess}/
- * {@code disable}/{@code listEnabledCount}/{@code captureQuota}) return void/int synchronously in TS,
- * so they call plain {@code @JSFunctor}/JSObject-method JS callbacks DIRECTLY -- no {@code @Async}.
+ * One of two async JS bridges composing in the same call graph: a
+ * {@link ClaudeHandleOrchestrator.AccountOps} whose ONE async operation ({@code
+ * manager.acquire(lane)}) is bridged with a {@code @Async} native method + {@link AsyncCallback},
+ * distinct from {@link JsAttemptExecutorBridge}'s, but in the SAME CPS-transformed call graph
+ * (the orchestrator's retry loop does {@code acquire} then {@code execute} then {@code acquire}
+ * then {@code execute}...). The SYNCHRONOUS ops ({@code reportError}/{@code reportRateLimit}/
+ * {@code reportSuccess}/{@code disable}/{@code listEnabledCount}/{@code captureQuota}) return
+ * void/int synchronously in TS, so they call plain {@code @JSFunctor}/JSObject-method JS
+ * callbacks DIRECTLY, no {@code @Async}.
  *
  * <p>The {@link #awaitAcquire} bridge mirrors {@code JsHttpClientBridge} precisely (see
  * {@link JsAttemptExecutorBridge} for the {@link JSString}-at-generic-boundaries rationale).

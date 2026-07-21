@@ -28,7 +28,7 @@ class HandleIrError extends Error {
 }
 
 const PROVIDER_ID = "claude-code";
-const LANE = "messages"; // Claude subscription limits are account-wide (index.ts:24)
+const LANE = "messages"; // Claude subscription limits are account-wide
 
 // Lazily-memoized dynamic import of the TeaVM ESM — the generated file is staged to
 // src/generated/ by `core/teavm-build.mjs` at build time and bundled by esbuild (deferred).
@@ -66,9 +66,9 @@ export async function handleViaJavaOrchestrator(request, ctx) {
     ctxModel: (ctx && ctx.model) || "",
     topAutoCandidate: getAutoCandidates(PROVIDER_ID)[0] || "",
   });
-  // Cooldown pair drives the Java orchestrator's no-reset-header exponential backoff, byte-matching
-  // request.ts:89-91's parseResetMs fallback (which the TS path applies but T6a's Java parseResetMs
-  // dropped). Read per-request like maxAttempts so a config edit applies without a restart.
+  // Cooldown pair drives the Java orchestrator's no-reset-header exponential backoff, matching
+  // the TS path's parseResetMs fallback. Read per-request like maxAttempts so a config edit
+  // applies without a restart.
   const configJson = JSON.stringify({
     maxAttempts: getMaxAttempts(),
     defaultCooldownSeconds: getDefaultCooldownSeconds(),
@@ -81,10 +81,9 @@ export async function handleViaJavaOrchestrator(request, ctx) {
   const proxyByAccount = new Map();      // proxy URL used for each account this request
   const acquiredByAccount = new Map();   // the acquired account object (fresh-lookup fallback)
 
-  // jsAcquire — await manager.acquire(lane); null ⇔ TS `!acquired || !acquired.account`. When an
+  // jsAcquire: await manager.acquire(lane); null means no acquired account. When an
   // account exists but has no access token, return access:"" so the orchestrator's missing-access
-  // branch fires with the exact "missing access token" reportError (index.ts:98), NOT the
-  // no-account branch.
+  // branch fires with the "missing access token" reportError, not the no-account branch.
   const jsAcquire = async (lane) => {
     const acquired = await manager.acquire(lane);
     if (!acquired || !acquired.account) return null;
@@ -92,10 +91,10 @@ export async function handleViaJavaOrchestrator(request, ctx) {
     return JSON.stringify({ accountId: acquired.account.id, access: acquired.access || "" });
   };
 
-  // jsExec — pure transport, reproducing index.ts:100-131 exactly: proxy select → fetch → on a
-  // proxy fetch error reportResult(false)+retry-direct → on direct/no-proxy error return
-  // transportFailed → on success reportResult(true, ms) if a proxy was used. Retains the live
-  // Response host-side; only {status, headers} cross to Java. No body is ever read here.
+  // jsExec: pure transport: proxy select → fetch → on a proxy fetch error
+  // reportResult(false)+retry-direct → on direct/no-proxy error return transportFailed → on
+  // success reportResult(true, ms) if a proxy was used. Retains the live Response host-side;
+  // only {status, headers} cross to Java. No body is ever read here.
   const jsExec = async (accountId, preparedJson) => {
     let prepared;
     try { prepared = JSON.parse(preparedJson); } catch { prepared = {}; }
@@ -141,14 +140,14 @@ export async function handleViaJavaOrchestrator(request, ctx) {
     });
   };
 
-  // jsReports — the synchronous account-reporting callbacks over the real `manager`.
+  // jsReports: the synchronous account-reporting callbacks over the real `manager`.
   const jsReports = {
     reportError(accountId, attempt, message) {
       manager.reportError(accountId, attempt, message);
     },
-    // ⚠ RE-FIRE THE PROXY SIGNAL (index.ts:139-143): after manager.reportRateLimit, if a proxy
-    // was used for this account, re-fire proxyManager.reportRateLimit with the ipSuspected quality
-    // signal derived from the FRESH account state — the reviewer-flagged signal that must not drop.
+    // Re-fire the proxy signal: after manager.reportRateLimit, if a proxy was used for this
+    // account, re-fire proxyManager.reportRateLimit with the ipSuspected quality signal derived
+    // from the fresh account state. This signal must not be dropped.
     reportRateLimit(accountId, lane, resetMsJson) {
       const resetMs = JSON.parse(resetMsJson); // number | null
       manager.reportRateLimit(accountId, lane, resetMs);
@@ -177,7 +176,7 @@ export async function handleViaJavaOrchestrator(request, ctx) {
   const decision = JSON.parse(decisionJson);
 
   if (decision.kind === "SERVE") {
-    // Return the RETAINED live Response verbatim (SSE/stream intact) — no body crossed to Java.
+    // Return the retained live Response verbatim (SSE/stream intact); no body crossed to Java.
     const retained = responses[decision.attemptRef];
     if (retained) return retained;
     // Defensive: a SERVE with no retained response should be impossible (every SERVE ref comes
@@ -188,11 +187,11 @@ export async function handleViaJavaOrchestrator(request, ctx) {
     });
   }
 
-  // SYNTHETIC — build the body here from the decision JSON (terminal/exhaustion paths).
+  // SYNTHETIC: build the body here from the decision JSON (terminal/exhaustion paths).
   return new Response(decision.body, { status: decision.status, headers: decision.headers });
 }
 
-// ---- SP-3 T2: handleIr (IR-native entry point) ---------------------------------------------
+// ---- handleIr (IR-native entry point) ---------------------------------------------
 //
 // The synthetic loader-facing URL used to re-enter handleViaJavaOrchestrator from an IrRequest
 // that never had a real inbound wire Request to begin with (handleIr's contract is (ir, ctx), no
@@ -207,19 +206,18 @@ const IR_SYNTHETIC_URL = "https://loader.local/v1/messages";
 // would corrupt it: the codec always injects id/content/model/stop_reason keys a bare error
 // envelope never had. handleIr throws HandleIrError instead, carrying the EXACT original bytes;
 // the front-door (core-proxy's server.ts/Router.java) catches this typed error and reconstructs
-// the response verbatim, restoring status fidelity on the IR path (T3c-1), so re-export it for
+// the response verbatim, restoring status fidelity on the IR path, so re-export it for
 // callers that only import from this module.
 export { HandleIrError };
 
 /**
- * IR-native alternative to handleViaJavaOrchestrator (SP-3 T2): encodes the IrRequest to Anthropic
- * wire text, runs it through the EXACT SAME transport/orchestrator flow as today (via
- * handleViaJavaOrchestrator, completely unchanged), then decodes a genuine 2xx response back to
- * the canonical IR: a streamed SSE response becomes a true-streaming IrEventStream (never
- * buffered); a non-streaming response becomes an IrResponse. Any non-2xx outcome throws
- * {@link HandleIrError} rather than forcing a non-message body through the IR (see its own
- * comment above), mirroring core-proxy's own reference handleIr contract (server-ir.test.ts /
- * IrRouterTest.java), where a provider signals failure by throwing, not by returning IR.
+ * IR-native alternative to handleViaJavaOrchestrator: encodes the IrRequest to Anthropic wire
+ * text, runs it through the same transport/orchestrator flow (via handleViaJavaOrchestrator),
+ * then decodes a genuine 2xx response back to the canonical IR: a streamed SSE response becomes
+ * a true-streaming IrEventStream (never buffered); a non-streaming response becomes an
+ * IrResponse. Any non-2xx outcome throws {@link HandleIrError} rather than forcing a non-message
+ * body through the IR (see its own comment above), mirroring core-proxy's own reference handleIr
+ * contract, where a provider signals failure by throwing, not by returning IR.
  */
 export async function handleIr(ir, ctx) {
   const bodyText = await translators.anthropic.encodeRequest(ir);

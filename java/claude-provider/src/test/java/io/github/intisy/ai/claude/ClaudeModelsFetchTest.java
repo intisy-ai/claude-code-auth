@@ -21,11 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Typed-capability parity test of {@link ClaudeProvider#models} (model-map Task 1, migrated to the
- * {@link io.github.intisy.ai.shared.routing.ModelCatalogProvider} SPI in E-C -- the retired {@code
- * GET /v1/models} HttpResponse branch used to be exercised through {@code handle()}; the typed
- * method is called directly now, since {@code handle()} no longer answers that URL at all).
- * Mirrors {@link ClaudeProviderTest}'s harness: a scripted {@link HttpClient} injected via {@link
+ * Typed-capability parity test of {@link ClaudeProvider#models}, exercised via the {@link
+ * io.github.intisy.ai.shared.routing.ModelCatalogProvider} SPI. Mirrors
+ * {@link ClaudeProviderTest}'s harness: a scripted {@link HttpClient} injected via {@link
  * ClaudeBackend#forTest}/{@link ClaudeBackend#registerForTest} so the real provider is driven
  * end-to-end without any real network call.
  */
