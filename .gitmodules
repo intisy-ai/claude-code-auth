@@ -13,3 +13,6 @@
 	path = core-ir
 	url = https://github.com/intisy-ai/core-ir.git
 	branch = main
+[submodule "anthropic-translator"]
+	path = anthropic-translator
+	url = https://github.com/intisy-ai/anthropic-translator.git

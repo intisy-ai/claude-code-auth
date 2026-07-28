@@ -10,7 +10,7 @@ import { proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
 import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
-import { translators } from "../../core-ir/dist/index.js";
+import { anthropicTranslator } from "../../anthropic-translator/dist/index.js";
 // Local, dependency-free copy of core-proxy's HandleIrError wire-error shape. The front-door
 // recognizes it by its stable `name` marker (duck-typed isHandleIrError), NOT by class identity --
 // esbuild bundles each side separately, so a shared class is never instanceof-compatible across the
@@ -202,7 +202,7 @@ const IR_SYNTHETIC_URL = "https://loader.local/v1/messages";
 // own SYNTHETIC error bodies: chatErrorBody/errorResponseBody) are carried out via core-proxy's
 // canonical HandleIrError, not returned as data. Neither body is guaranteed to be Anthropic
 // MESSAGE-shaped JSON (a SYNTHETIC body in particular can be missing the "type":"error" wrapper
-// entirely, see errorResponseBody), so forcing it through translators.anthropic.decodeResponse
+// entirely, see errorResponseBody), so forcing it through anthropicTranslator.decodeResponse
 // would corrupt it: the codec always injects id/content/model/stop_reason keys a bare error
 // envelope never had. handleIr throws HandleIrError instead, carrying the EXACT original bytes;
 // the front-door (core-proxy's server.ts/Router.java) catches this typed error and reconstructs
@@ -220,7 +220,7 @@ export { HandleIrError };
  * contract, where a provider signals failure by throwing, not by returning IR.
  */
 export async function handleIr(ir, ctx) {
-  const bodyText = await translators.anthropic.encodeRequest(ir);
+  const bodyText = await anthropicTranslator.encodeRequest(ir);
   const request = new Request(IR_SYNTHETIC_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -235,10 +235,10 @@ export async function handleIr(ir, ctx) {
 
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("text/event-stream") && response.body) {
-    const decodeStream = await translators.anthropic.decodeStream();
+    const decodeStream = await anthropicTranslator.decodeStream();
     return response.body.pipeThrough(decodeStream);
   }
 
   const wireText = await response.text();
-  return await translators.anthropic.decodeResponse(wireText);
+  return await anthropicTranslator.decodeResponse(wireText);
 }
