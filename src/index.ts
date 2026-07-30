@@ -3,7 +3,8 @@
 // a hook, so any extra export would register as a bogus plugin.
 // Slash-command / config invocations shell back in as `node <bundle> <action>`;
 // handle those first and exit so they never register the provider.
-import { deployCommands, defineConfig, defineReadme, maybeRunReadmeCli } from "../core/src/index.js";
+import { deployCommands, defineConfig, defineCapabilities, defineReadme, maybeRunReadmeCli } from "../core/src/index.js";
+import { COMMON_PROVIDER_CAPABILITIES } from "../core-auth/dist/index.js";
 import { CLAUDE_COMMANDS, maybeRunCli } from "./commands.js";
 
 // Register config under the SAME name the driver's settings.ts reads (config/claude-code.json)
@@ -16,6 +17,16 @@ defineConfig("claude-code", {
   account_selection_strategy: "hybrid",
   default_cooldown_seconds: 60,
   max_cooldown_seconds: 900,
+});
+
+defineCapabilities("claude-code", {
+  fields: [
+    ...COMMON_PROVIDER_CAPABILITIES,
+    { key: "logging", type: "boolean", label: "Logging", description: "Write this plugin's log file.", group: "General" },
+    { key: "max_account_attempts", type: "number", label: "Max account attempts", description: "How many accounts to try before giving up on a request.", min: 1, group: "Retry" },
+    { key: "default_cooldown_seconds", type: "number", label: "Default cooldown (s)", description: "Cooldown applied when a rate limit gives no reset time.", min: 0, group: "Retry" },
+    { key: "max_cooldown_seconds", type: "number", label: "Max cooldown (s)", min: 0, group: "Retry" },
+  ],
 });
 
 defineReadme({
