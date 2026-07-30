@@ -39,7 +39,13 @@ jobs:
           distribution: 'temurin'
 
       - run: npm install
-      - run: npm run build
+      - name: Build
+        run: npm run build
+        env:
+          # The TeaVM/Gradle build resolves the ai-java release via the GitHub API;
+          # authenticate it so it uses the 5,000/hr limit, not the 60/hr anonymous one.
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
       - run: git diff --exit-code -- README.md
       - run: npx vitest run
 
