@@ -25,6 +25,8 @@
   },
   "files": [
     "dist/",
+    "cairn.json",
+    "icon.svg",
     "README.md",
     "LICENSE"
   ],
