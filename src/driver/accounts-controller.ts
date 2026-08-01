@@ -2,7 +2,7 @@
 // Claude's AccountController: provider-owned status + Verify / Refresh actions on
 // top of core-auth's generic list/enable/remove helper.
 
-import { accountControllerFromManager, verifyAllAccounts, refreshAccountToken } from "../../core-auth/dist/index.js";
+import { accountControllerFromManager, verifyAllAccounts, refreshAccountToken, hasCapacity } from "../../core-auth/dist/index.js";
 import { ANTHROPIC_API_BASE, ANTHROPIC_OAUTH_BETA, ANTHROPIC_VERSION, CLAUDE_CODE_SYSTEM } from "../constants.js";
 import { login } from "./login.js";
 
@@ -179,12 +179,16 @@ async function verify(manager, view) {
   }
 }
 
-// Quota still remaining? (any unified pool below 100% utilization). Unknown -> false.
+// Quota still remaining? Maps the account's own pools shape into core-auth's neutral
+// {remainingFraction}[] and defers the "any pool with capacity left" decision to quota-health.ts.
+// Unknown -> false.
 export function accountHasQuota(account) {
-  const q = account && account.cachedQuota;
-  const pools = q && q.pools;
+  const pools = account && account.cachedQuota && account.cachedQuota.pools;
   if (!pools) return false;
-  return Object.values(pools).some((p) => p && typeof p.utilization === "number" && p.utilization < 1);
+  const mapped = Object.values(pools)
+    .filter((p) => p && typeof p.utilization === "number")
+    .map((p) => ({ remainingFraction: Math.max(0, Math.min(1, 1 - p.utilization)) }));
+  return hasCapacity(mapped);
 }
 
 export function createClaudeAccounts(manager) {

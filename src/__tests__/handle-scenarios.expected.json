@@ -532,6 +532,7 @@
       [
         "manager.reportError",
         "acc1",
+        "messages",
         0,
         "401 unauthorized"
       ],
@@ -611,6 +612,7 @@
       [
         "manager.reportError",
         "acc1",
+        "messages",
         0,
         "403 scope"
       ],
@@ -681,6 +683,7 @@
       [
         "manager.reportError",
         "acc1",
+        "messages",
         0,
         "<transport-failed>"
       ],
@@ -803,6 +806,7 @@
       [
         "manager.reportError",
         "acc1",
+        "messages",
         0,
         "missing access token"
       ],
@@ -1029,6 +1033,7 @@
       [
         "manager.reportError",
         "acc0",
+        "messages",
         0,
         "<transport-failed>"
       ],
@@ -1046,6 +1051,7 @@
       [
         "manager.reportError",
         "acc1",
+        "messages",
         1,
         "<transport-failed>"
       ],
@@ -1063,6 +1069,7 @@
       [
         "manager.reportError",
         "acc2",
+        "messages",
         2,
         "<transport-failed>"
       ],
@@ -1080,6 +1087,7 @@
       [
         "manager.reportError",
         "acc3",
+        "messages",
         3,
         "<transport-failed>"
       ]

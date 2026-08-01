@@ -1,5 +1,6 @@
 package io.github.intisy.ai.claude;
 
+import io.github.intisy.ai.shared.select.QuotaHealth;
 import io.github.intisy.ai.shared.spi.JsonCodec;
 
 import java.util.ArrayList;
@@ -212,7 +213,12 @@ public final class ClaudeQuotaParser {
 
     // ---- accountHasQuota (accounts-controller.ts) --------------------------------------------------
 
-    /** True if any cached pool has a numeric utilization below 1. Unknown/missing -&gt; false. */
+    /**
+     * Maps the account's cached pools into {@link QuotaHealth.Pool}s (remaining fraction, clamped
+     * to {@code [0, 1]}) and defers the "any pool with capacity left" decision to
+     * {@link QuotaHealth#hasCapacity}, the single source shared with claude's own TS
+     * {@code accounts-controller.ts} and antigravity's quota parser. Unknown/missing -&gt; false.
+     */
     @SuppressWarnings("unchecked")
     public static boolean accountHasQuota(Map<String, Object> account) {
         if (account == null) return false;
@@ -220,13 +226,15 @@ public final class ClaudeQuotaParser {
         if (!(q instanceof Map)) return false;
         Object poolsObj = ((Map<String, Object>) q).get("pools");
         if (!(poolsObj instanceof Map)) return false;
+        List<QuotaHealth.Pool> pools = new ArrayList<>();
         for (Object poolObj : ((Map<String, Object>) poolsObj).values()) {
-            if (poolObj instanceof Map) {
-                Object utilObj = ((Map<?, ?>) poolObj).get("utilization");
-                if (utilObj instanceof Number && ((Number) utilObj).doubleValue() < 1.0) return true;
-            }
+            if (!(poolObj instanceof Map)) continue;
+            Object utilObj = ((Map<?, ?>) poolObj).get("utilization");
+            if (!(utilObj instanceof Number)) continue;
+            double remaining = Math.max(0.0, Math.min(1.0, 1.0 - ((Number) utilObj).doubleValue()));
+            pools.add(new QuotaHealth.Pool(remaining));
         }
-        return false;
+        return QuotaHealth.hasCapacity(pools);
     }
 
     // ---- JsonCodec-backed convenience entry points (the SPI use this class needs) -------------

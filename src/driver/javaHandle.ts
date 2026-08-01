@@ -6,7 +6,7 @@
 // over the real manager, building the final Response). The provider-facing entry point is the
 // IR-native handleIr; handleViaJavaOrchestrator is its internal transport/orchestration core.
 
-import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse } from "../../core-auth/dist/index.js";
+import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse, initCoreAuth } from "../../core-auth/dist/index.js";
 import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
@@ -34,6 +34,11 @@ function headersFromJson(headersJson) {
 
 export async function handleViaJavaOrchestrator(request, ctx) {
   const log = (ctx && ctx.log) || (() => {});
+
+  // Defense-in-depth: manager.acquire(lane) already self-inits core-auth as the first action of
+  // every attempt loop iteration, before any of the sync jsReports callbacks below can fire for
+  // that same iteration. Awaited here too so a future caller can never race it.
+  await initCoreAuth();
 
   // Inputs the orchestrator needs; the leaderboard stays TS so its #1 candidate is passed in.
   let bodyText;
@@ -121,8 +126,8 @@ export async function handleViaJavaOrchestrator(request, ctx) {
 
   // jsReports: the synchronous account-reporting callbacks over the real `manager`.
   const jsReports = {
-    reportError(accountId, attempt, message) {
-      manager.reportError(accountId, attempt, message);
+    reportError(accountId, lane, attempt, message) {
+      manager.reportError(accountId, lane, attempt, message);
     },
     // Re-fire the proxy signal: after manager.reportRateLimit, if a proxy was used for this
     // account, re-fire proxyManager.reportRateLimit with the ipSuspected quality signal derived

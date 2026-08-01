@@ -27,6 +27,12 @@ dependencies {
     // (same thin-jar reasoning as :routing/:ir/:anthropic above), so TeaVM needs its own real
     // dependency to see the bytecode it transpiles.
     githubImplementation "intisy-ai:ai-java:1.0.7:standalone"
+    // ClaudeQuotaParser.accountHasQuota calls :accounts' QuotaHealth; :claude-provider only
+    // compileOnly's it (thin-jar policy), which does not propagate here, so TeaVM needs its own
+    // resolvable reference to transpile it into the JS bundle. Composite-substituted to
+    // project(":accounts") by the root settings.gradle's includeBuild, same local-dev-only
+    // resolution as :claude-provider's own accounts/jvm dependencies.
+    implementation "io.github.intisy:accounts:0.1.0"
     teavm teavm.libs.jsoApis
 }
 

@@ -65,8 +65,8 @@ class ClaudeHandleOrchestratorTest {
         }
 
         @Override
-        public void reportError(String accountId, int attempt, String message) {
-            calls.add("reportError(" + accountId + "," + attempt + ",\"" + message + "\")");
+        public void reportError(String accountId, String lane, int attempt, String message) {
+            calls.add("reportError(" + accountId + "," + lane + "," + attempt + ",\"" + message + "\")");
         }
 
         @Override
@@ -207,11 +207,11 @@ class ClaudeHandleOrchestratorTest {
         assertEquals(List.of(
                 "acquire(messages) -> acc1/tok1",
                 "captureQuota(acc1,{})",
-                "reportError(acc1,0,\"401 unauthorized\")",
+                "reportError(acc1,messages,0,\"401 unauthorized\")",
                 "acquire(messages) -> acc2/tok2",
                 "captureQuota(acc2,{})",
                 "disable(acc2,\"re-login required (token lacks inference scope)\")",
-                "reportError(acc2,1,\"403 scope\")",
+                "reportError(acc2,messages,1,\"403 scope\")",
                 "acquire(messages) -> acc3/tok3",
                 "captureQuota(acc3,{})",
                 "reportSuccess(acc3)"
@@ -236,7 +236,7 @@ class ClaudeHandleOrchestratorTest {
         assertEquals("ref0", decision.attemptRef);
         assertEquals(List.of(
                 "acquire(messages) -> acc1/null",
-                "reportError(acc1,0,\"missing access token\")",
+                "reportError(acc1,messages,0,\"missing access token\")",
                 "acquire(messages) -> acc1/tok1",
                 "captureQuota(acc1,{})",
                 "reportSuccess(acc1)"
@@ -322,9 +322,9 @@ class ClaudeHandleOrchestratorTest {
         assertEquals("{\"error\":{\"message\":\"Claude request failed after 2 attempts\"}}", decision.body);
         assertEquals(List.of(
                 "acquire(messages) -> acc1/tok1",
-                "reportError(acc1,0,\"transport failed\")",
+                "reportError(acc1,messages,0,\"transport failed\")",
                 "acquire(messages) -> acc1/tok1",
-                "reportError(acc1,1,\"transport failed\")"
+                "reportError(acc1,messages,1,\"transport failed\")"
         ), accounts.calls);
     }
 

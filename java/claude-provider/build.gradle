@@ -30,6 +30,12 @@ dependencies {
     // keeps this module's own jar THIN: the host's ProviderRegistry classloader already has these
     // classes on its classpath. Pin the version explicitly (no floating version).
     githubCompileOnly "intisy-ai:ai-java:1.0.7:standalone"
+    // ClaudeQuotaParser.accountHasQuota maps into :accounts' QuotaHealth (hasCapacity/ipSuspected).
+    // The pinned 1.0.7 release above predates QuotaHealth, so this compileOnly resolves ONLY
+    // through the local composite includeBuild (settings.gradle), same as the testImplementation
+    // dependency below. Bumping the pinned release is a separate, gated release-followup; CI's
+    // compileJava is not expected to resolve this until then.
+    compileOnly "io.github.intisy:accounts:0.1.0"
     // Local dev/test only: the composite includeBuild (settings.gradle) substitutes this
     // io.github.intisy:jvm coordinate for the real :jvm project, transitively pulling in :accounts.
     // Tests are skipped in CI (-x test -x compileTestJava) so this never needs to resolve there.
@@ -37,15 +43,20 @@ dependencies {
 }
 
 // The pinned githubCompileOnly release (ai-java 1.0.7) predates the core-proxy store-threading
-// fix and bundles its OWN stale HandlerCtx (no `store` field) inside its standalone/shaded jar --
-// the github-gradle plugin puts that jar ahead of project(":routing") on the compile classpath,
-// so without this reordering the stale duplicate class wins the classpath scan over the
-// up-to-date :routing sources this module actually wants (see the "keep the jar thin" dependency
-// comments above -- :routing was always meant to be the sole source of routing/HandlerCtx
-// classes). Prepend :routing's own compiled output so it resolves first for both compile tasks.
+// fix and bundles its OWN stale HandlerCtx (no `store` field) AND a stale shared.manager.
+// AccountManager (reportError still 3-arg, pre-QuotaHealth) inside its standalone/shaded jar --
+// the github-gradle plugin puts that jar ahead of project(":routing")/the composite-substituted
+// :accounts on the compile classpath, so without this reordering the stale duplicate classes win
+// the classpath scan over the up-to-date sources this module actually wants (see the "keep the jar
+// thin" dependency comments above -- :routing was always meant to be the sole source of routing/
+// HandlerCtx classes). Prepend :routing's own compiled output plus a detached resolution of the
+// composite-substituted :accounts (lane-aware reportError + QuotaHealth) so both resolve first for
+// both compile tasks.
+def accountsOverride = configurations.detachedConfiguration(
+        dependencies.create("io.github.intisy:accounts:0.1.0"))
 [compileJava, compileTestJava].each { t ->
     t.doFirst {
-        t.classpath = files(project(":routing").sourceSets.main.output.classesDirs) + t.classpath
+        t.classpath = files(project(":routing").sourceSets.main.output.classesDirs) + accountsOverride + t.classpath
     }
 }
 

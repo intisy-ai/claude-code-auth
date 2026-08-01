@@ -52,7 +52,7 @@ public final class JsAccountOpsBridge implements ClaudeHandleOrchestrator.Accoun
      * missing reset.
      */
     public interface JsReportFns extends JSObject {
-        void reportError(JSString accountId, int attempt, JSString message);
+        void reportError(JSString accountId, JSString lane, int attempt, JSString message);
 
         void reportRateLimit(JSString accountId, JSString lane, JSString resetMsJson);
 
@@ -89,8 +89,8 @@ public final class JsAccountOpsBridge implements ClaudeHandleOrchestrator.Accoun
     }
 
     @Override
-    public void reportError(String accountId, int attempt, String message) {
-        jsReports.reportError(JSString.valueOf(accountId), attempt, JSString.valueOf(message));
+    public void reportError(String accountId, String lane, int attempt, String message) {
+        jsReports.reportError(JSString.valueOf(accountId), JSString.valueOf(lane), attempt, JSString.valueOf(message));
     }
 
     @Override

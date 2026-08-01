@@ -81,8 +81,8 @@ function makeFakes(acquireScript, execScript, enabledCount) {
   };
 
   const jsReports = {
-    reportError(accountId, attempt, message) {
-      accountCalls.push(`reportError(${accountId},${attempt},"${message}")`);
+    reportError(accountId, lane, attempt, message) {
+      accountCalls.push(`reportError(${accountId},${lane},${attempt},"${message}")`);
     },
     reportRateLimit(accountId, lane, resetMsJson) {
       accountCalls.push(`reportRateLimit(${accountId},${lane},${JSON.parse(resetMsJson)})`);

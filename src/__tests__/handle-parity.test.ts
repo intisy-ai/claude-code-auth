@@ -38,10 +38,10 @@ const H = vi.hoisted(() => {
       if (a) fn(a);
       record(["manager.mutate", id, snap(a)]);
     }
-    reportError(id: string, attempt: number, reason: string) {
+    reportError(id: string, lane: string, attempt: number, reason: string) {
       const a = find(id);
       if (a) { a.coolingDownUntil = harness.now + 1000; a.cooldownReason = reason; }
-      record(["manager.reportError", id, attempt, reason]);
+      record(["manager.reportError", id, lane, attempt, reason]);
     }
     reportRateLimit(id: string, lane: string, resetMs: any) {
       const a = find(id);
@@ -133,9 +133,9 @@ function captureOutbound(url: any, init: any) {
 function normalizeCalls(calls: any[]) {
   return calls.map((c) => {
     if (c[0] === "manager.reportError") {
-      const reason = String(c[3] ?? "");
+      const reason = String(c[4] ?? "");
       if (reason === "transport failed" || reason.includes("__TRANSPORT__")) {
-        return [c[0], c[1], c[2], "<transport-failed>"];
+        return [c[0], c[1], c[2], c[3], "<transport-failed>"];
       }
     }
     return c;

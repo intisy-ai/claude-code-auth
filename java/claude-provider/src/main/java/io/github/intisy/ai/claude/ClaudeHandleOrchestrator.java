@@ -93,7 +93,7 @@ public final class ClaudeHandleOrchestrator {
         /** {@code manager.acquire(lane)}. {@code null} &lt;=&gt; the TS's {@code !acquired || !acquired.account}. */
         Acquired acquire(String lane);
 
-        void reportError(String accountId, int attempt, String message);
+        void reportError(String accountId, String lane, int attempt, String message);
 
         void reportRateLimit(String accountId, String lane, Long resetMs);
 
@@ -229,7 +229,7 @@ public final class ClaudeHandleOrchestrator {
             String accountId = acquired.accountId;
             String access = acquired.access;
             if (access == null || access.isEmpty()) {
-                accounts.reportError(accountId, attempt, "missing access token");
+                accounts.reportError(accountId, LANE, attempt, "missing access token");
                 continue;
             }
 
@@ -238,7 +238,7 @@ public final class ClaudeHandleOrchestrator {
                 prepared = AnthropicRequestTranslator.prepareClaudeRequest(json, in.url, init, access);
             } catch (RuntimeException e) {
                 log.log("prepare failed: " + e);
-                accounts.reportError(accountId, attempt, String.valueOf(e));
+                accounts.reportError(accountId, LANE, attempt, String.valueOf(e));
                 continue;
             }
 
@@ -249,7 +249,7 @@ public final class ClaudeHandleOrchestrator {
                 // the real per-branch error text itself (it alone has the Error object); this is
                 // the orchestrator's own bookkeeping call so account rotation still sees a
                 // reportError per failed attempt.
-                accounts.reportError(accountId, attempt, "transport failed");
+                accounts.reportError(accountId, LANE, attempt, "transport failed");
                 continue;
             }
 
@@ -274,7 +274,7 @@ public final class ClaudeHandleOrchestrator {
 
             if (result.status == 401) {
                 lastRef = result.attemptRef;
-                accounts.reportError(accountId, attempt, "401 unauthorized");
+                accounts.reportError(accountId, LANE, attempt, "401 unauthorized");
                 continue;
             }
 
@@ -282,7 +282,7 @@ public final class ClaudeHandleOrchestrator {
                 lastRef = result.attemptRef;
                 // Exact disabledReason string.
                 accounts.disable(accountId, DISABLED_REASON_403);
-                accounts.reportError(accountId, attempt, "403 scope");
+                accounts.reportError(accountId, LANE, attempt, "403 scope");
                 continue;
             }
 
