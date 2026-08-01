@@ -22,6 +22,11 @@ dependencies {
     // ClaudeProviderJs lives in the SAME package (io.github.intisy.ai.js) so it can reference
     // SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.
     implementation project(":teavm")
+    // ClaudeHandleOrchestrator.handle calls core-auth's RateLimitMath (io.github.intisy.ai.shared.
+    // select), part of ai-java's :accounts module. :claude-provider only `compileOnly`s that class
+    // (same thin-jar reasoning as :routing/:ir/:anthropic above), so TeaVM needs its own real
+    // dependency to see the bytecode it transpiles.
+    githubImplementation "intisy-ai:ai-java:1.0.7:standalone"
     teavm teavm.libs.jsoApis
 }
 

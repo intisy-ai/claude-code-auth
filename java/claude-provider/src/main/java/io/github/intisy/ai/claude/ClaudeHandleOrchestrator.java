@@ -1,5 +1,6 @@
 package io.github.intisy.ai.claude;
 
+import io.github.intisy.ai.shared.select.RateLimitMath;
 import io.github.intisy.ai.shared.spi.Clock;
 import io.github.intisy.ai.shared.spi.JsonCodec;
 import io.github.intisy.ai.shared.spi.Logger;
@@ -260,10 +261,13 @@ public final class ClaudeHandleOrchestrator {
                 Long resetMs = AnthropicRequestTranslator.parseResetMs(result.headers, clock.now());
                 // AnthropicRequestTranslator.parseResetMs deliberately does not implement the
                 // exponential-backoff fallback (it needs the cooldown config), returning null when
-                // neither the unified nor the retry-after header is present. The TS path falls
-                // through to that backoff in that case, so replicate it inline here (see
-                // computeBackoffResetMs) to keep reportRateLimit consistent across paths.
-                if (resetMs == null) resetMs = computeBackoffResetMs(attempt, cfg);
+                // neither the unified nor the retry-after header is present. Fall back to core's
+                // generic non-jittered backoff so reportRateLimit stays consistent across paths.
+                if (resetMs == null) {
+                    long baseMs = (long) cfg.defaultCooldownSeconds * 1000L;
+                    long maxMs = (long) cfg.maxCooldownSeconds * 1000L;
+                    resetMs = clock.now() + RateLimitMath.calculateBackoffMs(attempt, baseMs, maxMs, false);
+                }
                 accounts.reportRateLimit(accountId, LANE, resetMs);
                 continue; // rotate account
             }
@@ -296,22 +300,6 @@ public final class ClaudeHandleOrchestrator {
                 ? HandleDecision.serve(lastRef)
                 : HandleDecision.synthetic(502, plainJsonHeaders(),
                         errorResponseBody("Claude request failed after " + maxAttempts + " attempts"));
-    }
-
-    /**
-     * Exponential-backoff reset time (epoch ms) for a rate-limited response with NO reset header:
-     * <pre>now + Math.min(getDefaultCooldownSeconds()*1000 * 2^attempt, getMaxCooldownSeconds()*1000)</pre>
-     * Computed in {@code double} then floored to a long epoch-ms; {@code Clock} supplies "now" for
-     * test determinism.
-     *
-     * <p>core-auth's {@code RateLimitMath.calculateBackoffMs} is the canonical backoff-math home,
-     * but its formula intentionally differs (it adds random jitter by default and returns a relative
-     * DURATION, not an absolute epoch), so it cannot be reused here; hence the inline replication.
-     */
-    private long computeBackoffResetMs(int attempt, OrchestratorConfig cfg) {
-        double raw = (double) cfg.defaultCooldownSeconds * 1000.0 * Math.pow(2, attempt);
-        double capped = Math.min(raw, (double) cfg.maxCooldownSeconds * 1000.0);
-        return clock.now() + (long) capped;
     }
 
     // ---- synthetic response bodies ---------------------------------------------------------------
