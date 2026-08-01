@@ -4,63 +4,22 @@
 // form. The redirect lands on platform.claude.com and shows a `code#state` string
 // the user pastes back; there is no localhost loopback to listen on.
 
-import { spawn } from "child_process";
-import { createInterface } from "node:readline";
-import { addAccount, isTTY } from "../../core-auth/dist/index.js";
-import { authorizeClaude, exchangeClaude, encodeState } from "../oauth/oauth.js";
+import {
+  addAccount,
+  isTTY,
+  openBrowser,
+  parsePastedCallback,
+  awaitPaste as corePaste,
+  toCoreAccount,
+  encodeState,
+} from "../../core-auth/dist/index.js";
+import { authorizeClaude, exchangeClaude } from "../oauth/oauth.js";
 
 const PROVIDER_ID = "claude-code";
 
-// Accept `code#state`, a bare `code`, or the full redirect URL.
-function parsePastedCallback(input) {
-  const text = (input || "").trim();
-  if (!text) return null;
-  if (text.includes("code=")) {
-    const codeMatch = text.match(/[?&]code=([^&\s]+)/);
-    const stateMatch = text.match(/[?&]state=([^&\s]+)/);
-    if (codeMatch) return { code: decodeURIComponent(codeMatch[1]), state: stateMatch ? decodeURIComponent(stateMatch[1]) : null };
-  }
-  if (text.includes("#")) {
-    const [code, state] = text.split("#");
-    return { code: code.trim(), state: (state || "").trim() || null };
-  }
-  return { code: text, state: null };
-}
-
 function awaitPaste() {
   if (!isTTY()) return Promise.resolve(null);
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question("Paste the authorization code (code#state) here, then Enter: ", (answer) => resolve(answer));
-  }).finally(() => {
-    try { rl.close(); } catch {}
-  });
-}
-
-function tryOpenBrowser(url) {
-  try {
-    const platform = process.platform;
-    const command = platform === "win32" ? "cmd" : platform === "darwin" ? "open" : "xdg-open";
-    const args = platform === "win32" ? ["/c", "start", "", url] : [url];
-    const child = spawn(command, args, { detached: true, stdio: "ignore" });
-    child.on("error", () => {});
-    child.unref();
-  } catch {}
-}
-
-function toCoreAccount(result) {
-  return {
-    id: result.email || result.refresh.slice(0, 16),
-    email: result.email,
-    refresh: result.refresh,
-    access: result.access,
-    expires: result.expires,
-    addedAt: Date.now(),
-    lastUsed: 0,
-    enabled: true,
-    rateLimitResetTimes: {},
-    meta: {},
-  };
+  return corePaste("Paste the authorization code (code#state) here, then Enter: ");
 }
 
 export async function loginFlow() {
@@ -99,7 +58,7 @@ export async function login(opts) {
         flow.url +
         "\n\nAfter approving, copy the authorization code shown on the page and paste it below\n(or re-run: claude-code-auth login \"<code#state>\").\n",
     );
-    tryOpenBrowser(flow.url);
+    openBrowser(flow.url);
   }
   const account = await flow.complete(pastedCode != null ? pastedCode : await awaitPaste());
   if (!account) throw new Error("login failed");

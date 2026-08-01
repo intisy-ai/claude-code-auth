@@ -5,6 +5,7 @@
 // string the user pastes back (Claude Code's manual flow).
 
 import { generatePKCE } from "@openauthjs/openauth/pkce";
+import { encodeState, decodeState, calculateTokenExpiry } from "../../core-auth/dist/index.js";
 import {
   CLAUDE_AUTHORIZE_URL,
   CLAUDE_CLIENT_ID,
@@ -12,20 +13,6 @@ import {
   CLAUDE_SCOPES,
   CLAUDE_TOKEN_URL,
 } from "../constants.js";
-
-// The PKCE verifier is packed into `state` so a bare pasted code (no state) can
-// still recover it from this flow's own authorization result.
-export function encodeState(payload) {
-  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-}
-
-function decodeState(state) {
-  const normalized = String(state).replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
-  const parsed = JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
-  if (typeof parsed.verifier !== "string") throw new Error("Missing PKCE verifier in state");
-  return { verifier: parsed.verifier };
-}
 
 export async function authorizeClaude() {
   const pkce = await generatePKCE();
@@ -39,11 +26,6 @@ export async function authorizeClaude() {
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("state", encodeState({ verifier: pkce.verifier }));
   return { url: url.toString(), verifier: pkce.verifier };
-}
-
-function calculateExpiry(startMs, expiresInSeconds) {
-  const seconds = typeof expiresInSeconds === "number" && expiresInSeconds > 0 ? expiresInSeconds : 3600;
-  return startMs + seconds * 1000;
 }
 
 export async function exchangeClaude(code, state) {
@@ -75,7 +57,7 @@ export async function exchangeClaude(code, state) {
       type: "success",
       refresh: payload.refresh_token,
       access: payload.access_token,
-      expires: calculateExpiry(startTime, payload.expires_in),
+      expires: calculateTokenExpiry(startTime, payload.expires_in),
       email,
     };
   } catch (error) {

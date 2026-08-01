@@ -2,7 +2,8 @@
 // Standalone CLI for claude-code account management; writes to the shared
 // core-auth store so accounts are used by both OpenCode and Claude Code.
 
-import { listAccounts, removeAccount } from "../core-auth/dist/index.js";
+import { runAccountCli } from "../core-auth/dist/index.js";
+import { driver } from "./driver/index.js";
 import { login } from "./driver/login.js";
 
 const PROVIDER_ID = "claude-code";
@@ -12,34 +13,13 @@ function printUsage() {
 }
 
 async function main() {
-  const [command, argument] = process.argv.slice(2);
-  switch (command) {
-    case "login":
-      // `login` prompts for the code on the terminal; `login "<code#state>"`
-      // (or the full redirect URL) completes non-interactively, works in
-      // containers with no usable browser loopback.
-      await login({ log: (message) => process.stdout.write(message + "\n"), code: argument });
-      return;
-    case "list": {
-      const accounts = listAccounts(PROVIDER_ID);
-      if (accounts.length === 0) {
-        process.stdout.write("No Claude accounts. Run `claude-code-auth login`.\n");
-        return;
-      }
-      for (const account of accounts) {
-        const state = account.enabled === false ? " (disabled)" : "";
-        process.stdout.write("- " + (account.email || account.id) + state + "\n");
-      }
-      return;
-    }
-    case "remove":
-      if (!argument) { printUsage(); process.exitCode = 1; return; }
-      removeAccount(PROVIDER_ID, argument);
-      process.stdout.write("Removed " + argument + ".\n");
-      return;
-    default:
-      printUsage();
-      process.exitCode = 1;
+  // `login` prompts for the code on the terminal; `login "<code#state>"` (or the full
+  // redirect URL) completes non-interactively, works in containers with no usable
+  // browser loopback.
+  const handled = await runAccountCli({ providerId: PROVIDER_ID, driver: { accounts: driver.accounts, login } });
+  if (!handled) {
+    printUsage();
+    process.exitCode = 1;
   }
 }
 

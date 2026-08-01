@@ -6,44 +6,24 @@
 // over the real manager, building the final Response). The provider-facing entry point is the
 // IR-native handleIr; handleViaJavaOrchestrator is its internal transport/orchestration core.
 
-import { proxyManager, getAutoCandidates } from "../../core-auth/dist/index.js";
+import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse } from "../../core-auth/dist/index.js";
 import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
 import { anthropicTranslator } from "../../anthropic-translator/dist/index.js";
-// Local, dependency-free copy of core-proxy's HandleIrError wire-error shape. The front-door
-// recognizes it by its stable `name` marker (duck-typed isHandleIrError), NOT by class identity --
-// esbuild bundles each side separately, so a shared class is never instanceof-compatible across the
-// boundary anyway. Defining it here removes a build-time dependency on core-proxy's dist (which this
-// provider never builds), so a clean checkout (CI / fresh deploy) bundles without it.
-class HandleIrError extends Error {
-  constructor(init) {
-    super("handleIr transport error: " + init.status);
-    this.name = "HandleIrError";
-    this.status = init.status;
-    this.headers = init.headers;
-    this.body = init.body;
-    this.retryAfterMs = init.retryAfterMs;
-  }
-}
 
 const PROVIDER_ID = "claude-code";
 const LANE = "messages"; // Claude subscription limits are account-wide
 
-// Lazily-memoized dynamic import of the TeaVM ESM, the generated file is staged to
-// src/generated/ by `core/teavm-build.mjs` at build time and bundled by esbuild (deferred).
-let orchestratorPromise = null;
-function loadOrchestrator() {
-  if (!orchestratorPromise) orchestratorPromise = import("../generated/claude-orchestrator.teavm.js");
-  return orchestratorPromise;
-}
+// The generated file is staged to src/generated/ by `core/teavm-build.mjs` at build time
+// and bundled by esbuild (deferred, so the ~MB TeaVM bundle only evaluates on first use).
+const claudeOrchestrator = lazyModule(() => import("../generated/claude-orchestrator.teavm.js"));
 
 // Rebuild a Fetch `Headers` object from the header map the orchestrator hands back as JSON, so
 // the real `captureQuota` (which iterates `headers.forEach`) sees the same shape as the live path.
 function headersFromJson(headersJson) {
+  const obj = safeJsonParse(headersJson, {});
   const headers = new Headers();
-  let obj;
-  try { obj = headersJson ? JSON.parse(headersJson) : {}; } catch { obj = {}; }
   if (obj && typeof obj === "object") {
     for (const [name, value] of Object.entries(obj)) {
       if (value != null) headers.set(name, String(value));
@@ -96,8 +76,7 @@ export async function handleViaJavaOrchestrator(request, ctx) {
   // success reportResult(true, ms) if a proxy was used. Retains the live Response host-side;
   // only {status, headers} cross to Java. No body is ever read here.
   const jsExec = async (accountId, preparedJson) => {
-    let prepared;
-    try { prepared = JSON.parse(preparedJson); } catch { prepared = {}; }
+    const prepared = safeJsonParse(preparedJson, {});
     const url = prepared.request;
     const init = { method: prepared.method, headers: prepared.headers, body: prepared.body };
 
@@ -171,7 +150,7 @@ export async function handleViaJavaOrchestrator(request, ctx) {
     },
   };
 
-  const { handleClaudeRequestAsync } = await loadOrchestrator();
+  const { handleClaudeRequestAsync } = await claudeOrchestrator.load();
   const decisionJson = await handleClaudeRequestAsync(inputsJson, configJson, jsExec, jsAcquire, jsReports);
   const decision = JSON.parse(decisionJson);
 
@@ -199,7 +178,7 @@ export async function handleViaJavaOrchestrator(request, ctx) {
 const IR_SYNTHETIC_URL = "https://loader.local/v1/messages";
 
 // Non-2xx responses out of handleIr (real upstream "surface as-is", or one of the orchestrator's
-// own SYNTHETIC error bodies: chatErrorBody/errorResponseBody) are carried out via core-proxy's
+// own SYNTHETIC error bodies: chatErrorBody/errorResponseBody) are carried out via core-auth's
 // canonical HandleIrError, not returned as data. Neither body is guaranteed to be Anthropic
 // MESSAGE-shaped JSON (a SYNTHETIC body in particular can be missing the "type":"error" wrapper
 // entirely, see errorResponseBody), so forcing it through anthropicTranslator.decodeResponse

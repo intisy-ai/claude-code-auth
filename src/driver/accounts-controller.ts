@@ -2,7 +2,7 @@
 // Claude's AccountController: provider-owned status + Verify / Refresh actions on
 // top of core-auth's generic list/enable/remove helper.
 
-import { accountControllerFromManager } from "../../core-auth/dist/index.js";
+import { accountControllerFromManager, verifyAllAccounts, refreshAccountToken } from "../../core-auth/dist/index.js";
 import { ANTHROPIC_API_BASE, ANTHROPIC_OAUTH_BETA, ANTHROPIC_VERSION, CLAUDE_CODE_SYSTEM } from "../constants.js";
 import { login } from "./login.js";
 
@@ -138,14 +138,6 @@ async function refreshQuotaAll(manager) {
   }
 }
 
-function claudeStatus(account, now) {
-  if (account.enabled === false) return "disabled";
-  if (typeof account.coolingDownUntil === "number" && account.coolingDownUntil > now) return "cooling-down";
-  const lanes = account.rateLimitResetTimes || {};
-  if (Object.values(lanes).some((reset) => typeof reset === "number" && reset > now)) return "rate-limited";
-  return "active";
-}
-
 async function verify(manager, view) {
   const name = view.email || view.id;
   try {
@@ -187,23 +179,6 @@ async function verify(manager, view) {
   }
 }
 
-async function verifyAll(manager) {
-  for (const account of manager.list()) {
-    if (account.enabled === false) { out("- " + (account.email || account.id) + ": skipped (disabled)"); continue; }
-    await verify(manager, { id: account.id, email: account.email });
-  }
-  out("Done.");
-}
-
-async function refreshToken(manager, view) {
-  const name = view.email || view.id;
-  try {
-    out((await manager.refresh(view.id)) ? "✓ refreshed " + name : "✗ no OAuth config / refresh token for " + name);
-  } catch (error) {
-    out("✗ refresh failed for " + name + ": " + ((error && error.message) || error));
-  }
-}
-
 // Quota still remaining? (any unified pool below 100% utilization). Unknown -> false.
 export function accountHasQuota(account) {
   const q = account && account.cachedQuota;
@@ -214,7 +189,6 @@ export function accountHasQuota(account) {
 
 export function createClaudeAccounts(manager) {
   return accountControllerFromManager(manager, {
-    status: claudeStatus,
     // surface WHY the system disabled an account (e.g. 403 -> "re-login required").
     // Only disabledReason renders: cooldownReason holds transient raw error text
     // (e.g. "TypeError: fetch failed") that must never leak into the account row.
@@ -226,10 +200,10 @@ export function createClaudeAccounts(manager) {
       const account = await login({ log: (message) => process.stderr.write(message + "\n") });
       return account ? { id: account.id, email: account.email, status: "active", enabled: true } : null;
     },
-    actions: () => [{ label: "Verify all accounts", run: () => verifyAll(manager) }],
+    actions: () => [{ label: "Verify all accounts", run: () => verifyAllAccounts(manager, verify) }],
     accountActions: (view) => [
       { label: "Verify access", run: () => verify(manager, view) },
-      { label: "Refresh token", run: () => refreshToken(manager, view) },
+      { label: "Refresh token", run: () => refreshAccountToken(manager, view) },
     ],
   });
 }

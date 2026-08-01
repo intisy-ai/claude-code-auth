@@ -4,7 +4,7 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { defineProvider, AccountManager } from "../../core-auth/dist/index.js";
+import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups } from "../../core-auth/dist/index.js";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
@@ -20,6 +20,33 @@ import {
 } from "./settings.js";
 
 const PROVIDER_ID = "claude-code";
+
+// Retry/backoff key names claude-code has always used; kept as-is (not unified with
+// antigravity's own key names) so an existing user's config value is never silently dropped.
+export const RETRY_KEYS = { baseKey: "default_cooldown_seconds", maxKey: "max_cooldown_seconds" };
+
+export const CLAUDE_SETTINGS_SCHEMA = [
+  {
+    title: "Account rotation",
+    fields: [
+      {
+        key: "max_account_attempts",
+        label: "Max account attempts",
+        type: "number",
+        min: 1,
+        max: 20,
+        hint: "How many accounts to try before giving up on a request.",
+      },
+      {
+        key: "account_selection_strategy",
+        label: "Account selection strategy",
+        type: "enum",
+        options: ["sticky", "round-robin", "hybrid"],
+        hint: "How accounts are picked across requests (applies on restart).",
+      },
+    ],
+  },
+];
 
 const manager = new AccountManager(PROVIDER_ID, {
   selection: getSelection(),
@@ -86,49 +113,7 @@ export const driver = {
   accounts: createClaudeAccounts(manager),
   proxies: true,
   settings: {
-    groups: [
-      {
-        title: "Account rotation",
-        fields: [
-          {
-            key: "max_account_attempts",
-            label: "Max account attempts",
-            type: "number",
-            min: 1,
-            max: 20,
-            hint: "How many accounts to try before giving up on a request.",
-          },
-          {
-            key: "account_selection_strategy",
-            label: "Account selection strategy",
-            type: "enum",
-            options: ["sticky", "round-robin", "hybrid"],
-            hint: "How accounts are picked across requests (applies on restart).",
-          },
-        ],
-      },
-      {
-        title: "Rate limits",
-        fields: [
-          {
-            key: "default_cooldown_seconds",
-            label: "Default cooldown (seconds)",
-            type: "number",
-            min: 1,
-            max: 3600,
-            hint: "Base cooldown (seconds) for a 429 with no retry-after; doubles per attempt.",
-          },
-          {
-            key: "max_cooldown_seconds",
-            label: "Max cooldown (seconds)",
-            type: "number",
-            min: 1,
-            max: 3600,
-            hint: "Maximum cooldown (seconds) the backoff can grow to.",
-          },
-        ],
-      },
-    ],
+    groups: [...toSettingsGroups(CLAUDE_SETTINGS_SCHEMA), ...retryBackoffSettingsGroups(RETRY_KEYS)],
     get: (key) => {
       if (key === "max_account_attempts") return getMaxAttempts();
       if (key === "account_selection_strategy") return getSelection();
@@ -139,5 +124,3 @@ export const driver = {
     set: (key, value) => setSetting(key, value),
   },
 };
-
-export const ClaudeCodeProvider = defineProvider(driver).opencode;
