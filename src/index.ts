@@ -12,13 +12,6 @@ import {
 } from "../core-auth/dist/index.js";
 import { CLAUDE_COMMANDS, maybeRunCli } from "./commands.js";
 import { driver, CLAUDE_SETTINGS_SCHEMA, RETRY_KEYS } from "./driver/index.js";
-import { serveDirect } from "../opencode-proxy/dist/index.js";
-
-// Inject the OpenCode front-door here (scoped to this OpenCode entry's bundle, kept
-// out of the handler/cli bundles). core-auth's dispatchOpencodeFetch reads
-// def.serveDirect and, when no out-of-process proxy is configured, calls it to
-// serve offline in-process.
-driver.serveDirect = serveDirect;
 
 // Registered under the SAME name the driver's settings.ts reads (config/claude-code.json).
 // (The deployed bundle/command name stays "claude-code-auth"; only the config NAME is claude-code.)
