@@ -102,8 +102,8 @@ async function fetchModels(ctx) {
 export const driver = {
   id: PROVIDER_ID,
   label: "Claude Code",
-  opencodeProvider: "claude-code", // own namespace so OpenCode routes through our loader
-  opencodeNpm: "@ai-sdk/anthropic",
+  appProviderId: "claude-code", // own namespace so the app layer routes through our loader
+  appNpm: "@ai-sdk/anthropic",
   models,
   fetchModels,
   sorts: ["leaderboard"],   // opt into core's built-in quality sort (manual is automatic)

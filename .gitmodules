@@ -16,6 +16,3 @@
 [submodule "anthropic-translator"]
 	path = anthropic-translator
 	url = https://github.com/intisy-ai/anthropic-translator.git
-[submodule "opencode-proxy"]
-	path = opencode-proxy
-	url = https://github.com/intisy-ai/opencode-proxy.git
