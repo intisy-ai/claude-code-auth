@@ -8,6 +8,7 @@ on:
 permissions:
   id-token: write
   contents: write
+  packages: read
 
 jobs:
   publish:
@@ -43,11 +44,11 @@ jobs:
         run: npm run build
         env:
           # The Gradle build resolves io.github.intisy:ai-java from GitHub Packages Maven
-          # (intisy-ai/ai-java), which requires read:packages even for public packages;
-          # github.token cannot read another repo's packages, so use the org PAT.
+          # (intisy-ai/ai-java). GitHub Packages needs a token even for public packages;
+          # ai-java's package is public, so the job's github.token (packages: read) reads it.
           GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.PAT }}
-          GH_TOKEN: ${{ secrets.PAT }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
       - run: git diff --exit-code -- README.md
       - run: npx vitest run
 
