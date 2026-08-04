@@ -42,10 +42,12 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # The TeaVM/Gradle build resolves the ai-java release via the GitHub API;
-          # authenticate it so it uses the 5,000/hr limit, not the 60/hr anonymous one.
-          GITHUB_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
+          # The Gradle build resolves io.github.intisy:ai-java from GitHub Packages Maven
+          # (intisy-ai/ai-java), which requires read:packages even for public packages;
+          # github.token cannot read another repo's packages, so use the org PAT.
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.PAT }}
+          GH_TOKEN: ${{ secrets.PAT }}
       - run: git diff --exit-code -- README.md
       - run: npx vitest run
 

@@ -21,43 +21,17 @@ dependencies {
     testImplementation project(":anthropic")
 
     // Phase 6: ClaudeBackend self-assembles Store/HttpClient/JsonCodec/Clock/Random + a real
-    // AccountManager from the JVM backends + :accounts. CI has no composite includeBuild, so the
-    // MAIN compile dependency comes from the PUBLISHED ai-java release (1.0.7) via github-gradle's
-    // githubCompileOnly (-> compileOnly). Pinned to the STANDALONE fat asset (ai-java-standalone.jar,
-    // classifier "standalone") because it's the one release asset that bundles jvm.backend + the
-    // shared.manager/shared.model classes (AccountManager/AccountStore/OAuthConfig/Account) this
-    // module needs -- the plain ai-java.jar only has jvm.backend. compileOnly (not implementation)
-    // keeps this module's own jar THIN: the host's ProviderRegistry classloader already has these
-    // classes on its classpath. Pin the version explicitly (no floating version).
-    githubCompileOnly "intisy-ai:ai-java:1.0.7:standalone"
-    // ClaudeQuotaParser.accountHasQuota maps into :accounts' QuotaHealth (hasCapacity/ipSuspected).
-    // The pinned 1.0.7 release above predates QuotaHealth, so this compileOnly resolves ONLY
-    // through the local composite includeBuild (settings.gradle), same as the testImplementation
-    // dependency below. Bumping the pinned release is a separate, gated release-followup; CI's
-    // compileJava is not expected to resolve this until then.
-    compileOnly "io.github.intisy:accounts:0.1.0"
+    // AccountManager from the JVM backends + shared.select.QuotaHealth. ai-java is consumed from
+    // GitHub Packages Maven (java/build.gradle's repositories block) as a single fat jar
+    // (:routing + :accounts + :jvm shaded together), so one coordinate covers everything
+    // ClaudeBackend and ClaudeQuotaParser.accountHasQuota (QuotaHealth) need. compileOnly (not
+    // implementation) keeps this module's own jar THIN: the host's ProviderRegistry classloader
+    // already has these classes on its classpath.
+    compileOnly "io.github.intisy:ai-java:1.0.9"
     // Local dev/test only: the composite includeBuild (settings.gradle) substitutes this
     // io.github.intisy:jvm coordinate for the real :jvm project, transitively pulling in :accounts.
     // Tests are skipped in CI (-x test -x compileTestJava) so this never needs to resolve there.
     testImplementation "io.github.intisy:jvm:0.1.0"
-}
-
-// The pinned githubCompileOnly release (ai-java 1.0.7) predates the core-proxy store-threading
-// fix and bundles its OWN stale HandlerCtx (no `store` field) AND a stale shared.manager.
-// AccountManager (reportError still 3-arg, pre-QuotaHealth) inside its standalone/shaded jar --
-// the github-gradle plugin puts that jar ahead of project(":routing")/the composite-substituted
-// :accounts on the compile classpath, so without this reordering the stale duplicate classes win
-// the classpath scan over the up-to-date sources this module actually wants (see the "keep the jar
-// thin" dependency comments above -- :routing was always meant to be the sole source of routing/
-// HandlerCtx classes). Prepend :routing's own compiled output plus a detached resolution of the
-// composite-substituted :accounts (lane-aware reportError + QuotaHealth) so both resolve first for
-// both compile tasks.
-def accountsOverride = configurations.detachedConfiguration(
-        dependencies.create("io.github.intisy:accounts:0.1.0"))
-[compileJava, compileTestJava].each { t ->
-    t.doFirst {
-        t.classpath = files(project(":routing").sourceSets.main.output.classesDirs) + accountsOverride + t.classpath
-    }
 }
 
 // Keep the jar filename version-less (claude-provider.jar) even though project.version is now set
