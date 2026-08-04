@@ -3,15 +3,19 @@
 // a hook, so any extra export would register as a bogus plugin.
 // Slash-command / config invocations shell back in as `node <bundle> <action>`;
 // handle those first and exit so they never register the provider.
-import { deployCommands, defineConfig, defineCapabilities, defineReadme, maybeRunReadmeCli } from "../core/src/index.js";
+import { deployCommands, defineConfig, defineCapabilities, defineReadme, maybeRunReadmeCli, emitEvent } from "../core/src/index.js";
 import {
   COMMON_PROVIDER_CAPABILITIES,
   toCapabilitiesFields,
   retryBackoffCapabilities,
   defineProviderPlugin,
+  setActivityEmitter,
 } from "../core-auth/dist/index.js";
 import { CLAUDE_COMMANDS, maybeRunCli } from "./commands.js";
 import { driver, CLAUDE_SETTINGS_SCHEMA, RETRY_KEYS } from "./driver/index.js";
+
+// Best-effort: let core-auth's account activity (added/removed/login/rate_limited/models_refreshed) flow onto the bus.
+setActivityEmitter((spec: unknown, source: string) => emitEvent(spec, source));
 
 // Registered under the SAME name the driver's settings.ts reads (config/claude-code.json).
 // (The deployed bundle/command name stays "claude-code-auth"; only the config NAME is claude-code.)
