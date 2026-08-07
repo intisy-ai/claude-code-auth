@@ -43,7 +43,7 @@
     ]
   },
   "scripts": {
-    "build": "npm --prefix core-ir install && npm --prefix core-ir run build && npm --prefix anthropic-translator install && npm --prefix anthropic-translator run build && node core/teavm-build.mjs --java-dir java --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && npm --prefix core-auth run build:teavm && npx tsc --project core-auth/tsconfig.json && node core-auth/copy-generated.mjs --root core-auth && node build.mjs",
+    "build": "npm --prefix core install && npm --prefix core run build && npm --prefix core-ir install && npm --prefix core-ir run build && npm --prefix anthropic-translator install && npm --prefix anthropic-translator run build && node core/teavm-build.mjs --java-dir java --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && npm --prefix core-auth install && npm --prefix core-auth run build && node build.mjs",
     "postbuild": "node dist/index.js readme",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && vitest run",
