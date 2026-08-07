@@ -2,8 +2,8 @@
 // Standalone CLI for claude-code account management; writes to the shared
 // core-auth store so accounts are used by both OpenCode and Claude Code.
 
-import { runAccountCli, setActivityEmitter } from "../core-auth/dist/index.js";
-import { emitEvent } from "../core/src/index.js";
+import { runAccountCli, setActivityEmitter } from "@intisy-ai/core-auth";
+import { emitEvent } from "@intisy-ai/core";
 import { driver } from "./driver/index.js";
 import { login } from "./driver/login.js";
 

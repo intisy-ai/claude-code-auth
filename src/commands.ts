@@ -2,8 +2,8 @@
 // Cross-app slash-commands for claude-code-auth. Config name matches the package
 // (claude-code-auth.json). The account command is namespaced (/claude-accounts)
 // so it never collides with the other providers' account commands.
-import { configCommand, runConfigCli } from "../core/src/index.js";
-import { printAccounts } from "../core-auth/dist/index.js";
+import { configCommand, runConfigCli } from "@intisy-ai/core";
+import { printAccounts } from "@intisy-ai/core-auth";
 import { driver } from "./driver/index.js";
 
 const PROVIDER_ID = "claude-code";

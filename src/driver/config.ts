@@ -2,7 +2,7 @@
 // Claude driver OAuth config. Public installed-app client → client_id only, no
 // secret (the token endpoint is a public PKCE client).
 
-import { oauthConfigFor } from "../../core-auth/dist/index.js";
+import { oauthConfigFor } from "@intisy-ai/core-auth";
 import { CLAUDE_CLIENT_ID, CLAUDE_TOKEN_URL } from "../constants.js";
 
 export function clientId() {

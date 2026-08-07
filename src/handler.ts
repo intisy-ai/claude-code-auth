@@ -2,8 +2,8 @@
 // Claude entry: the IR-native handleIr() the front-door invokes for the claude-code
 // provider, plus accounts + menu for the loader's account UI.
 
-import { providerHandlerExports, setActivityEmitter } from "../core-auth/dist/index.js";
-import { emitEvent } from "../core/src/index.js";
+import { providerHandlerExports, setActivityEmitter } from "@intisy-ai/core-auth";
+import { emitEvent } from "@intisy-ai/core";
 import { driver } from "./driver/index.js";
 
 // This bundle (dist/handler.js) is loaded independently of dist/index.js (the Claude proxy

@@ -3,14 +3,14 @@
 // a hook, so any extra export would register as a bogus plugin.
 // Slash-command / config invocations shell back in as `node <bundle> <action>`;
 // handle those first and exit so they never register the provider.
-import { deployCommands, defineConfig, defineCapabilities, defineReadme, maybeRunReadmeCli, emitEvent } from "../core/src/index.js";
+import { deployCommands, defineConfig, defineCapabilities, defineReadme, maybeRunReadmeCli, emitEvent } from "@intisy-ai/core";
 import {
   COMMON_PROVIDER_CAPABILITIES,
   toCapabilitiesFields,
   retryBackoffCapabilities,
   defineProviderPlugin,
   setActivityEmitter,
-} from "../core-auth/dist/index.js";
+} from "@intisy-ai/core-auth";
 import { CLAUDE_COMMANDS, maybeRunCli } from "./commands.js";
 import { driver, CLAUDE_SETTINGS_SCHEMA, RETRY_KEYS } from "./driver/index.js";
 

@@ -53,6 +53,29 @@ jobs:
       - run: git diff --exit-code -- README.md
       - run: npx vitest run
 
+      # A shared library is compiled from its submodule, which package.json declares as a
+      # file: dependency. That cannot resolve from a published tarball, so each one is
+      # pinned to the version the submodule actually carries: an npm consumer then installs
+      # a library at least as new as the one this artifact was compiled against. A repo with
+      # no file: dependency is untouched.
+      - name: Pin file dependencies to published versions
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const deps = pkg.dependencies || {};
+          let changed = 0;
+          for (const [name, spec] of Object.entries(deps)) {
+            if (!String(spec).startsWith("file:")) continue;
+            const { version } = JSON.parse(fs.readFileSync(String(spec).slice(5) + "/package.json", "utf8"));
+            if (!version) throw new Error(name + " declares no version to pin");
+            deps[name] = "^" + version;
+            changed++;
+            console.log(name + " -> ^" + version);
+          }
+          if (changed) fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+          NODE
+
       - name: Set version from tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"

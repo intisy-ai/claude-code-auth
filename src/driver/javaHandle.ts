@@ -6,7 +6,7 @@
 // over the real manager, building the final Response). The provider-facing entry point is the
 // IR-native handleIr; handleViaJavaOrchestrator is its internal transport/orchestration core.
 
-import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse, initCoreAuth } from "../../core-auth/dist/index.js";
+import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse, initCoreAuth } from "@intisy-ai/core-auth";
 import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";

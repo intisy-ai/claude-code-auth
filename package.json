@@ -50,7 +50,9 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@openauthjs/openauth": "^0.4.3"
+    "@openauthjs/openauth": "^0.4.3",
+    "@intisy-ai/core": "file:core",
+    "@intisy-ai/core-auth": "file:core-auth"
   },
   "devDependencies": {
     "@types/node": "^22.19.19",

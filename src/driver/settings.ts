@@ -3,8 +3,8 @@
 // (config/claude-code.json), read/written via core getConfigValue/setConfigValue.
 // Distinct from config.ts, which holds the OAuth client config.
 
-import { getConfigValue, setConfigValue } from "../../core/src/index.js";
-import { coercePositiveInt } from "../../core-auth/dist/index.js";
+import { getConfigValue, setConfigValue } from "@intisy-ai/core";
+import { coercePositiveInt } from "@intisy-ai/core-auth";
 
 const PACKAGE_NAME = "claude-code";
 const DEFAULT_MAX_ATTEMPTS = 4;

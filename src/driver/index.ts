@@ -4,7 +4,7 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups } from "../../core-auth/dist/index.js";
+import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups } from "@intisy-ai/core-auth";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
