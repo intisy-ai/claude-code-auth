@@ -1,6 +1,6 @@
 {
   "name": "claude-code-auth",
-  "version": "2.3.0",
+  "version": "2.12.1",
   "description": "Claude Code subscription auth provider for OpenCode and Claude Code, multiple Claude accounts via OAuth, with subscription rate limits exposed to OpenCode.",
   "main": "dist/index.js",
   "type": "module",
@@ -43,13 +43,16 @@
     ]
   },
   "scripts": {
-    "build": "npm --prefix core-ir install && npm --prefix core-ir run build && npm --prefix anthropic-translator install && npm --prefix anthropic-translator run build && node core/teavm-build.mjs --java-dir java --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && npm --prefix core-auth run build:teavm && npx tsc --project core-auth/tsconfig.json && node core-auth/copy-generated.mjs --root core-auth && node build.mjs",
+    "build": "npm --prefix core install && npm --prefix core run build && npm --prefix core-ir install && npm --prefix core-ir run build && npm --prefix anthropic-translator install && npm --prefix anthropic-translator run build && node core/teavm-build.mjs --java-dir java --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && npm --prefix core-auth install && npm --prefix core-auth run build && node build.mjs",
     "postbuild": "node dist/index.js readme",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && vitest run",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@intisy-ai/anthropic-translator": "file:anthropic-translator",
+    "@intisy-ai/core": "file:core",
+    "@intisy-ai/core-auth": "file:core-auth",
     "@openauthjs/openauth": "^0.4.3"
   },
   "devDependencies": {

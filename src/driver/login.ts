@@ -4,7 +4,7 @@
 // here is Claude's own. The redirect lands on platform.claude.com and shows a `code#state`
 // string the user pastes back, so there is no localhost loopback to listen on.
 
-import { defineOAuthLogin } from "../../core-auth/dist/index.js";
+import { defineOAuthLogin } from "@intisy-ai/core-auth";
 import { authorizeClaude, exchangeClaude } from "../oauth/oauth.js";
 
 export const { loginFlow, login } = defineOAuthLogin({

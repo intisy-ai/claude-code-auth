@@ -2,7 +2,7 @@
 // Claude's AccountController: provider-owned status + Verify / Refresh actions on
 // top of core-auth's generic list/enable/remove helper.
 
-import { accountControllerFromManager, verifyAllAccounts, refreshAccountToken, hasCapacity } from "../../core-auth/dist/index.js";
+import { accountControllerFromManager, verifyAllAccounts, refreshAccountToken, hasCapacity } from "@intisy-ai/core-auth";
 import { ANTHROPIC_API_BASE, ANTHROPIC_OAUTH_BETA, ANTHROPIC_VERSION, CLAUDE_CODE_SYSTEM } from "../constants.js";
 import { login } from "./login.js";
 

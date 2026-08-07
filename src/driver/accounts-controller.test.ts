@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { describe, it, expect, beforeAll } from "vitest";
 import { accountHasQuota } from "./accounts-controller.js";
-import { initCoreAuth } from "../../core-auth/dist/index.js";
+import { initCoreAuth } from "@intisy-ai/core-auth";
 
 describe("accountHasQuota (claude-code)", () => {
   // accountHasQuota now delegates to core-auth's quota-health.ts (getCoreAuth().quotaHasCapacity),

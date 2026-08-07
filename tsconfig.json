@@ -8,6 +8,9 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    // Compiled from the submodules, not installed, so each specifier maps to the
+    // built output it resolves to at runtime.
+    "paths": { "@intisy-ai/core": ["./core/dist/index.d.ts"], "@intisy-ai/core-auth": ["./core-auth/dist/index.d.ts"], "@intisy-ai/anthropic-translator": ["./anthropic-translator/dist/index.d.ts"] },
     "forceConsistentCasingInFileNames": true,
     "declaration": true
   },

@@ -1,5 +1,7 @@
 rootProject.name = "claude-code-auth-java"
 
+apply from: file("../core/gradle/submodule-modules.gradle")
+
 // claude-code-auth's Java side: T6a ports the two SAFEST pure-logic pieces of the TS driver
 // (AnthropicRequestTranslator <- src/plugin/request.ts, ClaudeQuotaParser <- src/driver/
 // accounts-controller.ts) to transpilable Java, needing only the JsonCodec SPI. Mirrors
@@ -10,26 +12,22 @@ rootProject.name = "claude-code-auth-java"
 // claude-code-auth/core-proxy) -- not core-auth's own nested copy. :routing is aliased in
 // exactly the way stub-auth's own settings.gradle aliases it (project path preserved, just a
 // different projectDir) so the SAME coordinates line up across every provider's java/ module.
-include ":routing"
-project(":routing").projectDir = file("../core-proxy/java/routing")
+includeFromSubmodule ":routing", "core-proxy"
 
 // :teavm - core-proxy's own TeaVM js-base (SimpleJsonCodec/etc), aliased in exactly like :routing
 // above so :claude-teavm can depend on it with a plain project(":teavm") reference and reuse
 // SimpleJsonCodec rather than duplicate it.
-include ":teavm"
-project(":teavm").projectDir = file("../core-proxy/java/teavm")
+includeFromSubmodule ":teavm", "core-proxy"
 
 // :ir - core-ir's canonical IR types, aliased in exactly like :routing/:teavm above. core-ir is a
 // DIRECT submodule of claude-code-auth (../core-ir from here, i.e. claude-code-auth/core-ir),
 // not nested inside another submodule.
-include ":ir"
-project(":ir").projectDir = file("../core-ir/java/ir")
+includeFromSubmodule ":ir", "core-ir"
 
 // :anthropic - the Anthropic translator (AnthropicTranslator etc.), aliased the same way from the
 // anthropic-translator submodule (../anthropic-translator/java/anthropic), a DIRECT submodule of
 // claude-code-auth like core-ir.
-include ":anthropic"
-project(":anthropic").projectDir = file("../anthropic-translator/java/anthropic")
+includeFromSubmodule ":anthropic", "anthropic-translator"
 
 // :claude-provider - AnthropicRequestTranslator + ClaudeQuotaParser. Bucket B (handle/
 // fetch/quota-refresh via HttpClient/Store) and Bucket C (login/TUI/opencode-merge) stay TS --
