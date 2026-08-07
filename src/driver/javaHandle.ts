@@ -10,7 +10,7 @@ import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonPar
 import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
-import { anthropicTranslator } from "../../anthropic-translator/dist/index.js";
+import { anthropicTranslator } from "@intisy-ai/anthropic-translator";
 
 const PROVIDER_ID = "claude-code";
 const LANE = "messages"; // Claude subscription limits are account-wide
