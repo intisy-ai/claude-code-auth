@@ -13,3 +13,4 @@ const common = { bundle: true, platform: "node", format: "esm", banner, logLevel
 await build({ ...common, entryPoints: ["src/index.ts"], outfile: "dist/index.js" });
 await build({ ...common, entryPoints: ["src/handler.ts"], outfile: "dist/handler.js" });
 await build({ ...common, entryPoints: ["src/cli.ts"], outfile: "dist/cli.js" });
+await build({ ...common, entryPoints: ["src/plugin.ts"], outfile: "dist/plugin.js" });

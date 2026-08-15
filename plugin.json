@@ -1,0 +1,15 @@
+{
+  "$schema": "./core/api/schema/plugin.schema.json",
+  "id": "claude-code-auth",
+  "api": 1,
+  "entry": "dist/plugin.js",
+  "displayName": "Claude Code",
+  "icon": "icon.svg",
+  "capabilities": ["provider"],
+  "repo": {
+    "role": "Claude Code (Anthropic) provider",
+    "category": "ai-provider",
+    "domains": ["claude", "anthropic"],
+    "tech": "typescript"
+  }
+}
