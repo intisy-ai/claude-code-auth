@@ -2,7 +2,7 @@
   "$schema": "./core/api/schema/plugin.schema.json",
   "id": "claude-code-auth",
   "api": 1,
-  "entry": "dist/plugin.js",
+  "entry": "dist/index.js",
   "displayName": "Claude Code",
   "icon": "icon.svg",
   "capabilities": ["provider"],
