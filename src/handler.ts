@@ -11,4 +11,4 @@ import { driver } from "./driver/index.js";
 // own copy of core-auth's module-level emitter and needs its own one-time wiring.
 setActivityEmitter((spec, source) => emitEvent(spec, source));
 
-export const { handleIr, accounts, loginFlow, menu, menuModel, def } = providerHandlerExports(driver);
+export const { handleIr, accounts, loginFlow, menu, menuModel } = providerHandlerExports(driver);
