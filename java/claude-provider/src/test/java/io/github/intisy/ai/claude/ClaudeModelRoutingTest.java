@@ -4,6 +4,7 @@ import io.github.intisy.ai.shared.spi.JsonCodec;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -83,7 +84,7 @@ class ClaudeModelRoutingTest {
         String out = ClaudeModelRouting.applyAssignedModel(json, "{\"model\":\"claude-sonnet-4-5\",\"messages\":[]}",
                 "claude-opus-4-1", logs::add);
         assertEquals("{\"model\":\"claude-opus-4-1\",\"messages\":[]}", out);
-        assertEquals(List.of("model rewrite: claude-sonnet-4-5 -> claude-opus-4-1 (tier assignment)"), logs);
+        assertEquals(Arrays.asList("model rewrite: claude-sonnet-4-5 -> claude-opus-4-1 (tier assignment)"), logs);
     }
 
     @Test

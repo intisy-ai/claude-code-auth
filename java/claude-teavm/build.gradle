@@ -48,6 +48,12 @@ tasks.named("compileJava") {
     options.release = 17
 }
 
+// Same JVM-version attribute matching problem as compileJava, now that the root block also
+// pins compileTestJava to release 8: this module's test dependencies (teavm-junit) require 17.
+tasks.named("compileTestJava") {
+    options.release = 17
+}
+
 teavm.js {
     mainClass = "io.github.intisy.ai.js.ClaudeProviderJs"
     moduleType = JSModuleType.ES2015

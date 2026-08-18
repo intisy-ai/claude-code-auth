@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -121,7 +122,7 @@ class ClaudeHandleOrchestratorTest {
 
         assertEquals(ClaudeHandleOrchestrator.HandleDecision.Kind.SERVE, decision.kind);
         assertEquals("ref0", decision.attemptRef);
-        assertEquals(List.of(
+        assertEquals(Arrays.asList(
                 "acquire(messages) -> acc1/tok1",
                 "captureQuota(acc1,{})",
                 "reportSuccess(acc1)"
@@ -143,7 +144,7 @@ class ClaudeHandleOrchestratorTest {
 
         assertEquals(ClaudeHandleOrchestrator.HandleDecision.Kind.SERVE, decision.kind);
         assertEquals("ref1", decision.attemptRef);
-        assertEquals(List.of(
+        assertEquals(Arrays.asList(
                 "acquire(messages) -> acc1/tok1",
                 "captureQuota(acc1,{anthropic-ratelimit-unified-reset=1700000100})",
                 "reportRateLimit(acc1,messages,1700000100000)",
@@ -176,7 +177,7 @@ class ClaudeHandleOrchestratorTest {
         assertEquals(ClaudeHandleOrchestrator.HandleDecision.Kind.SERVE, decision.kind);
         assertEquals("ref2", decision.attemptRef);
         // attempt 0: now + 60_000*2^0 = 1_700_000_060_000; attempt 1: now + 60_000*2^1 = 1_700_000_120_000.
-        assertEquals(List.of(
+        assertEquals(Arrays.asList(
                 "acquire(messages) -> acc1/tok1",
                 "captureQuota(acc1,{})",
                 "reportRateLimit(acc1,messages,1700000060000)",
@@ -204,7 +205,7 @@ class ClaudeHandleOrchestratorTest {
         ClaudeHandleOrchestrator.HandleDecision decision = orchestrator(0).handle(inputs(), cfg(4), exec, accounts);
 
         assertEquals("ref2", decision.attemptRef);
-        assertEquals(List.of(
+        assertEquals(Arrays.asList(
                 "acquire(messages) -> acc1/tok1",
                 "captureQuota(acc1,{})",
                 "reportError(acc1,messages,0,\"401 unauthorized\")",
@@ -234,7 +235,7 @@ class ClaudeHandleOrchestratorTest {
         ClaudeHandleOrchestrator.HandleDecision decision = orchestrator(0).handle(inputs(), cfg(4), exec, accounts);
 
         assertEquals("ref0", decision.attemptRef);
-        assertEquals(List.of(
+        assertEquals(Arrays.asList(
                 "acquire(messages) -> acc1/null",
                 "reportError(acc1,messages,0,\"missing access token\")",
                 "acquire(messages) -> acc1/tok1",
@@ -295,7 +296,7 @@ class ClaudeHandleOrchestratorTest {
 
         assertEquals(ClaudeHandleOrchestrator.HandleDecision.Kind.SERVE, decision.kind);
         assertEquals("ref1", decision.attemptRef); // the LAST attempt's real 429, not a synthesized error
-        assertEquals(List.of(
+        assertEquals(Arrays.asList(
                 "acquire(messages) -> acc1/tok1",
                 "captureQuota(acc1,{anthropic-ratelimit-unified-reset=1700000100})",
                 "reportRateLimit(acc1,messages,1700000100000)",
@@ -320,7 +321,7 @@ class ClaudeHandleOrchestratorTest {
         assertEquals(ClaudeHandleOrchestrator.HandleDecision.Kind.SYNTHETIC, decision.kind);
         assertEquals(502, decision.status);
         assertEquals("{\"error\":{\"message\":\"Claude request failed after 2 attempts\"}}", decision.body);
-        assertEquals(List.of(
+        assertEquals(Arrays.asList(
                 "acquire(messages) -> acc1/tok1",
                 "reportError(acc1,messages,0,\"transport failed\")",
                 "acquire(messages) -> acc1/tok1",
@@ -340,7 +341,7 @@ class ClaudeHandleOrchestratorTest {
 
         assertEquals(ClaudeHandleOrchestrator.HandleDecision.Kind.SERVE, decision.kind);
         assertEquals("ref0", decision.attemptRef);
-        assertEquals(List.of(
+        assertEquals(Arrays.asList(
                 "acquire(messages) -> acc1/tok1",
                 "captureQuota(acc1,{})"
         ), accounts.calls);

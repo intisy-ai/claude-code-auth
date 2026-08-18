@@ -7,8 +7,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,19 +32,19 @@ class ClaudeConfigTest {
         assertEquals("Claude", group.title);
 
         List<String> keys = group.fields.stream().map(f -> f.key).collect(java.util.stream.Collectors.toList());
-        assertEquals(List.of("logging", "max_account_attempts", "account_selection_strategy",
+        assertEquals(Arrays.asList("logging", "max_account_attempts", "account_selection_strategy",
                 "default_cooldown_seconds", "max_cooldown_seconds"), keys);
 
         ConfigField logging = group.fields.stream()
-                .filter(f -> f.key.equals("logging")).findFirst().orElseThrow();
+                .filter(f -> f.key.equals("logging")).findFirst().orElseThrow(NoSuchElementException::new);
         assertEquals("bool", logging.type, "type must use the dashboard vocabulary (bool), not \"boolean\"");
 
         ConfigField attempts = group.fields.stream()
-                .filter(f -> f.key.equals("max_account_attempts")).findFirst().orElseThrow();
+                .filter(f -> f.key.equals("max_account_attempts")).findFirst().orElseThrow(NoSuchElementException::new);
         assertEquals("number", attempts.type);
 
         ConfigField strategy = group.fields.stream()
-                .filter(f -> f.key.equals("account_selection_strategy")).findFirst().orElseThrow();
+                .filter(f -> f.key.equals("account_selection_strategy")).findFirst().orElseThrow(NoSuchElementException::new);
         assertEquals("select", strategy.type, "type must use the dashboard vocabulary (select), not \"enum\"");
         assertTrue(strategy.options.contains("sticky"));
         assertTrue(strategy.options.contains("round-robin"));
@@ -60,8 +64,10 @@ class ClaudeConfigTest {
     @Test
     void putValuesPersistsAndReReadsMergedValues(@TempDir Path dir) {
         ClaudeBackend backend = ClaudeBackend.forConfigDir(dir.toString());
-        Map<String, Object> updated = ClaudeConfig.putValues(backend,
-                Map.of("max_account_attempts", 7L, "account_selection_strategy", "sticky"));
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put("max_account_attempts", 7L);
+        overrides.put("account_selection_strategy", "sticky");
+        Map<String, Object> updated = ClaudeConfig.putValues(backend, overrides);
         assertEquals(7L, updated.get("max_account_attempts"));
         assertEquals("sticky", updated.get("account_selection_strategy"));
 
@@ -76,9 +82,9 @@ class ClaudeConfigTest {
     @Test
     void putValuesIgnoresInvalidEnumValue_keepsPriorOverride(@TempDir Path dir) {
         ClaudeBackend backend = ClaudeBackend.forConfigDir(dir.toString());
-        ClaudeConfig.putValues(backend, Map.of("account_selection_strategy", "sticky"));
+        ClaudeConfig.putValues(backend, Collections.singletonMap("account_selection_strategy", "sticky"));
         Map<String, Object> updated = ClaudeConfig.putValues(backend,
-                Map.of("account_selection_strategy", "not-a-real-strategy"));
+                Collections.singletonMap("account_selection_strategy", "not-a-real-strategy"));
         assertEquals("sticky", updated.get("account_selection_strategy"), "invalid value must be ignored, not persisted");
     }
 }

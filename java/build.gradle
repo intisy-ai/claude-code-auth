@@ -42,9 +42,8 @@ subprojects {
         }
     }
 
-    // Validate the MAIN compilation against the Java 8 API surface (not just source syntax).
-    // compileTestJava is excluded: tests may legitimately use newer JDK APIs.
-    tasks.matching { it.name == "compileJava" }.configureEach {
+    // All Java source, main and test alike, must stay within the JDK 1.8 API surface; javac enforces it.
+    tasks.matching { it.name == "compileJava" || it.name == "compileTestJava" }.configureEach {
         options.release = 8
     }
 
