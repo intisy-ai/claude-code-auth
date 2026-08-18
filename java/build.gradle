@@ -34,6 +34,12 @@ subprojects {
     java {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+
+        // 17 is which JDK COMPILES; options.release = 8 below is which JVM RUNS the output. The
+        // floor is 17 because TeaVM 0.15.0's artifacts publish minimum-JVM metadata above 8.
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
     }
 
     // Validate the MAIN compilation against the Java 8 API surface (not just source syntax).
