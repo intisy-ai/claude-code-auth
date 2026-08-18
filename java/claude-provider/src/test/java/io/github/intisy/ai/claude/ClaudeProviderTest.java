@@ -25,7 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,7 +75,7 @@ class ClaudeProviderTest {
         Map<String, Object> values = provider.getConfigValues(ctx);
         assertEquals(Boolean.TRUE, values.get("logging"));
 
-        Map<String, Object> updated = provider.putConfigValues(ctx, java.util.Collections.singletonMap("logging", Boolean.FALSE));
+        Map<String, Object> updated = provider.putConfigValues(ctx, Collections.singletonMap("logging", Boolean.FALSE));
         assertEquals(Boolean.FALSE, updated.get("logging"));
     }
 
