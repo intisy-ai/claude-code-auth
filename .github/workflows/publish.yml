@@ -16,6 +16,7 @@ jobs:
     uses: intisy/workflows/.github/workflows/publish-npm.yml@main
     with:
       unscoped_name: 'claude-code-auth'
+      scope: 'intisy-ai'
       patch_ceiling: 20
       needs_java: true
       jar_module: 'claude-provider'

@@ -7,4 +7,8 @@ permissions:
   contents: write
 jobs:
   promote:
-    uses: intisy-ai/workflows/.github/workflows/merge-to-main.yml@main
+    uses: intisy/workflows/.github/workflows/merge.yml@main
+    with:
+      source: experimental
+      target: main
+      sync_back: true

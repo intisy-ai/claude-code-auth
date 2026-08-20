@@ -10,4 +10,7 @@ permissions:
   contents: write
 jobs:
   promote:
-    uses: intisy-ai/workflows/.github/workflows/merge-to-experimental.yml@main
+    uses: intisy/workflows/.github/workflows/merge.yml@main
+    with:
+      source: ${{ github.sha }}
+      target: experimental
