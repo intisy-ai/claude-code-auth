@@ -1,5 +1,6 @@
 name: Promote to Main
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
