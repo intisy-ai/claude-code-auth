@@ -11,7 +11,7 @@ dependencies {
     // (keeping its shipped jar thin) -- that does NOT propagate to us, so :routing is declared
     // again below for the SPI types (JsonCodec) ClaudeProviderJs references directly.
     implementation project(":claude-provider")
-    implementation project(":routing")
+    implementation project(":spi")
     // :claude-provider only `compileOnly`s :ir and :anthropic too (same thin-jar reasoning), which
     // does not propagate to us, so both are declared again below so the compiled orchestrator JS
     // bundle actually contains core-ir's IR types and the AnthropicTranslator that
@@ -21,7 +21,7 @@ dependencies {
     // core-proxy's own :teavm js-base (SimpleJsonCodec) -- reused rather than duplicated;
     // ClaudeProviderJs lives in the SAME package (io.github.intisy.ai.js) so it can reference
     // SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.
-    implementation project(":teavm")
+    implementation project(":js-base")
     // ClaudeHandleOrchestrator.handle calls core-auth's RateLimitMath (io.github.intisy.ai.shared.
     // select) and ClaudeQuotaParser.accountHasQuota calls QuotaHealth; :claude-provider only
     // `compileOnly`s ai-java for both (thin-jar reasoning as :routing/:ir/:anthropic above), which

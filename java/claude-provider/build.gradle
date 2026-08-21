@@ -6,8 +6,8 @@ dependencies {
     // :routing's classes out of this module's own built jar (the host's ProviderRegistry
     // classloader already has them); testImplementation re-adds it so test code can construct
     // SPI-typed references too.
-    compileOnly project(":routing")
-    testImplementation project(":routing")
+    compileOnly project(":spi")
+    testImplementation project(":spi")
 
     // core-ir's IR types: AnthropicRequestTranslator round-trips the inbound request body through
     // the IR instead of hand-rewriting the parsed JSON. Same "keep the shipped jar thin"

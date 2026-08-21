@@ -12,18 +12,18 @@ apply from: file("../core/gradle/submodule-modules.gradle")
 // stub-auth's java/settings.gradle exactly (see F:/Documents/GitHub/javascript/providers/
 // stub-auth/java/settings.gradle) -- same aliasing technique for :routing/:teavm.
 //
-// core-proxy is a DIRECT submodule of claude-code-auth (../core-proxy from here, i.e.
-// claude-code-auth/core-proxy) -- not core-auth's own nested copy. :routing is aliased in
-// exactly the way stub-auth's own settings.gradle aliases it (project path preserved, just a
-// different projectDir) so the SAME coordinates line up across every provider's java/ module.
-includeFromSubmodule ":routing", "core-proxy"
+// :spi is the plugin-to-host contract, from the core-contracts submodule (../core-contracts from
+// here). It is aliased with the project path preserved and only projectDir differing, the ecosystem
+// convention, so the same coordinates line up across every provider's java/ module. A provider
+// carries no proxy: the routing engine is a different consumer of this same contract.
+includeFromSubmodule ":spi", "core-contracts"
 
-// :teavm - core-proxy's own TeaVM js-base (SimpleJsonCodec/etc), aliased in exactly like :routing
-// above so :claude-teavm can depend on it with a plain project(":teavm") reference and reuse
-// SimpleJsonCodec rather than duplicate it.
-includeFromSubmodule ":teavm", "core-proxy"
+// :js-base - the TeaVM implementations of :spi's host-injected services (SimpleJsonCodec and
+// friends), aliased like :spi above so :claude-teavm can reference them with a plain
+// project(":js-base") dependency and reuse the source rather than duplicating it.
+includeFromSubmodule ":js-base", "core-contracts"
 
-// :ir - core-ir's canonical IR types, aliased in exactly like :routing/:teavm above. core-ir is a
+// :ir - core-ir's canonical IR types, aliased in exactly like :spi/:js-base above. core-ir is a
 // DIRECT submodule of claude-code-auth (../core-ir from here, i.e. claude-code-auth/core-ir),
 // not nested inside another submodule.
 includeFromSubmodule ":ir", "core-ir"

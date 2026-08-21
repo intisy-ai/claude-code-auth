@@ -6,9 +6,6 @@
 	path = core
 	url = https://github.com/intisy-ai/core
 	branch = main
-[submodule "core-proxy"]
-	path = core-proxy
-	url = https://github.com/intisy-ai/core-proxy.git
 [submodule "core-ir"]
 	path = core-ir
 	url = https://github.com/intisy-ai/core-ir.git
@@ -16,3 +13,6 @@
 [submodule "anthropic-translator"]
 	path = anthropic-translator
 	url = https://github.com/intisy-ai/anthropic-translator.git
+[submodule "core-contracts"]
+	path = core-contracts
+	url = https://github.com/intisy-ai/core-contracts.git
