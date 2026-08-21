@@ -12,7 +12,7 @@ function contextSpy() {
   const provided: Record<string, unknown> = {};
   return {
     provided,
-    context: { provide: vi.fn((id: string, value: unknown) => { provided[id] = value; }), paths: { home: "/tmp/home" } },
+    context: { provide: vi.fn((key: string | { id: string }, value: unknown) => { provided[typeof key === "string" ? key : key.id] = value; }), paths: { home: "/tmp/home" } },
   };
 }
 
