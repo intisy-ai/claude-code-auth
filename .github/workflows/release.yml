@@ -50,4 +50,4 @@ jobs:
       npm_pack: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') }}
       generate_release_notes: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') }}
       release_assets: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') && 'release-asset/*.tgz' || '' }}
-      jar_module: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') && '' || 'claude-provider' }}
+      jar_module: ${{ !startsWith(inputs.tag || github.ref_name, 'gh-v') && 'claude-provider' || '' }}
