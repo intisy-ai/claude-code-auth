@@ -13,6 +13,3 @@
 [submodule "anthropic-translator"]
 	path = anthropic-translator
 	url = https://github.com/intisy-ai/anthropic-translator.git
-[submodule "core-contracts"]
-	path = core-contracts
-	url = https://github.com/intisy-ai/core-contracts.git
