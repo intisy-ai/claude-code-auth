@@ -1,6 +1,6 @@
 node_modules/
 dist/
-# TeaVM-compiled orchestrator ESM staged by core/teavm-build.mjs at build time — never committed.
+# TeaVM-compiled orchestrator ESM staged by core/teavm-build.mjs at build time, never committed.
 src/generated/
 .DS_Store
 .env
@@ -11,9 +11,8 @@ yarn-error.log*
 package-lock.json
 .superpowers/
 
-# java/ Gradle module (claude-provider/claude-teavm) -- build output only, never source.
-java/build/
-java/*/build/
-java/.gradle/
+build/
+*/build/
+.gradle/
 docs/
 graphify-out/
