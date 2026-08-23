@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { providerSupport } from "@intisy-ai/core-auth";
 
 const handleIr = vi.fn(async () => ({ id: "answered" }));
 
@@ -8,7 +9,9 @@ vi.mock("./driver/index.js", () => ({
   RETRY_KEYS: [],
 }));
 
-function contextSpy() {
+// The host's own service, which is where the provider helpers come from now. A test supplies the
+// real one, so what it exercises is what a loader hands over rather than a stand-in for it.
+function contextSpy(services: Record<string, unknown> = { "provider-support": providerSupport() }) {
   const provided: Record<string, unknown> = {};
   return {
     provided,
@@ -16,6 +19,8 @@ function contextSpy() {
       provide: vi.fn((key: string | { id: string }, value: unknown) => { provided[typeof key === "string" ? key : key.id] = value; }),
       // The engine mints a typed key from an id alone, which is all the plugin needs from it here.
       capability: (id: string) => ({ id }),
+      service: (id: string) => ({ id }),
+      services: { get: (key: { id: string }) => services[key.id] },
       paths: { home: "/tmp/home" },
     },
   };
@@ -46,6 +51,14 @@ describe("the claude-code-auth api plugin", () => {
     const ctx = { configDir: "/tmp/home", log: () => {}, model: "m", provider: "claude-code" };
     await expect(capability.handleIr({ model: "m" }, ctx)).resolves.toEqual({ id: "answered" });
     expect(handleIr).toHaveBeenCalledWith({ model: "m" }, ctx);
+  });
+
+  // A host that offers no provider support cannot run a provider at all, and naming the service is
+  // the only way an operator learns which host is at fault.
+  it("names the missing service rather than leaving the capability unprovided", async () => {
+    const plugin = (await import("./plugin.js")).default;
+    const { context } = contextSpy({});
+    await expect(async () => plugin.activate(context as never)).rejects.toThrow(/provider-support/);
   });
 
   it("deactivates without throwing", async () => {

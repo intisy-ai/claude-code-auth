@@ -35,5 +35,10 @@
       "anthropic"
     ],
     "tech": "typescript"
+  },
+  "services": {
+    "consumes": [
+      "provider-support"
+    ]
   }
 }
