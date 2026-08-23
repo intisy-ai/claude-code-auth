@@ -55,7 +55,7 @@ npm install claude-code-auth
 
 ## Configuration
 
-Config file: `<configDir>/config/claude-code.json` (edit via the loader or `/claude-code-config set`).
+Config file: `<configDir>/config/claude-code.json` (edit it directly, or through whatever settings surface the app offers).
 
 ```json
 {
@@ -79,7 +79,6 @@ Config file: `<configDir>/config/claude-code.json` (edit via the loader or `/cla
 
 | Command | Description | Arguments |
 | --- | --- | --- |
-| `/claude-code-auth-config` | View and change claude-code-auth configuration | `list | get <key> | set <key> <value>` |
 | `/claude-accounts` | List signed-in Claude subscription accounts |  |
 
 ## Dependencies

@@ -4,7 +4,7 @@ const handleIr = vi.fn(async () => ({ id: "answered" }));
 
 vi.mock("./driver/index.js", () => ({
   driver: { id: "claude-code", label: "Claude Code", models: {}, handleIr, loginFlow: async () => ({ url: "", complete: async () => null }) },
-  CLAUDE_SETTINGS_SCHEMA: {},
+  CLAUDE_SETTINGS_SCHEMA: [],
   RETRY_KEYS: [],
 }));
 
@@ -12,16 +12,21 @@ function contextSpy() {
   const provided: Record<string, unknown> = {};
   return {
     provided,
-    context: { provide: vi.fn((key: string | { id: string }, value: unknown) => { provided[typeof key === "string" ? key : key.id] = value; }), paths: { home: "/tmp/home" } },
+    context: {
+      provide: vi.fn((key: string | { id: string }, value: unknown) => { provided[typeof key === "string" ? key : key.id] = value; }),
+      // The engine mints a typed key from an id alone, which is all the plugin needs from it here.
+      capability: (id: string) => ({ id }),
+      paths: { home: "/tmp/home" },
+    },
   };
 }
 
 describe("the claude-code-auth api plugin", () => {
-  it("provides exactly the provider capability its manifest declares", async () => {
+  it("provides exactly the capabilities its manifest declares", async () => {
     const plugin = (await import("./plugin.js")).default;
     const { context, provided } = contextSpy();
     await plugin.activate(context as never);
-    expect(Object.keys(provided)).toEqual(["provider"]);
+    expect(Object.keys(provided).sort()).toEqual(["provider", "settings"]);
   });
 
   it("names the driver's provider id and advertises one lane", async () => {

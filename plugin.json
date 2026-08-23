@@ -5,11 +5,35 @@
   "entry": "dist/index.js",
   "displayName": "Claude Code",
   "icon": "icon.svg",
-  "capabilities": ["provider"],
+  "capabilities": [
+    "provider",
+    "settings"
+  ],
+  "commands": [
+    {
+      "name": "claude-accounts",
+      "description": "List signed-in Claude subscription accounts",
+      "shell": "node \"{{BUNDLE}}\" accounts",
+      "body": "Above are the Claude subscription accounts and their enabled state. Report them; if none, tell the user to add one (oc auth login -> Claude, or the loader login flow)."
+    }
+  ],
+  "config": {
+    "name": "claude-code",
+    "defaults": {
+      "logging": true,
+      "max_account_attempts": 4,
+      "account_selection_strategy": "hybrid",
+      "default_cooldown_seconds": 60,
+      "max_cooldown_seconds": 900
+    }
+  },
   "repo": {
     "role": "Claude Code (Anthropic) provider",
     "category": "ai-provider",
-    "domains": ["claude", "anthropic"],
+    "domains": [
+      "claude",
+      "anthropic"
+    ],
     "tech": "typescript"
   }
 }

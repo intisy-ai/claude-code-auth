@@ -6,7 +6,7 @@ runPluginContract({
   entry: "dist/index.js",
   configName: "claude-code",
   app: "both",
-  commands: ["claude-code-auth-config", "claude-accounts"],
+  commands: ["claude-accounts"],
   deploy: "load",
   actions: [["accounts"]],
   readme: true,
