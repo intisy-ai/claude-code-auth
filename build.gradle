@@ -6,7 +6,7 @@
 // recipe antigravity-auth's own java/build.gradle uses (Phase 6 of the JVM claude provider plan),
 // scoped to :claude-provider only (the one publishable artifact in this multi-module build).
 plugins {
-    id "io.github.intisy.github-gradle" version "1.10.0" apply false
+    id "io.github.intisy.github-gradle" version "1.10.3" apply false
 }
 
 subprojects {

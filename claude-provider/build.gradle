@@ -6,18 +6,18 @@ dependencies {
     // :routing's classes out of this module's own built jar (the host's ProviderRegistry
     // classloader already has them); testImplementation re-adds it so test code can construct
     // SPI-typed references too.
-    compileOnly project(":auth-contracts")
+    githubCompileOnly "intisy-ai:core-auth:1.0.0:auth-contracts"
     // api's seam implementations (NoopLogger). compileOnly like the vocabulary above: the host
     // carries them, so this jar must not bundle a second copy.
-    compileOnly project(":seam")
-    testImplementation project(":auth-contracts")
+    githubCompileOnly "intisy-ai:api:1.0.1:seam"
+    githubTestImplementation "intisy-ai:core-auth:1.0.0:auth-contracts"
 
     // core-ir's IR types: AnthropicRequestTranslator round-trips the inbound request body through
     // the IR instead of hand-rewriting the parsed JSON. Same "keep the shipped jar thin"
     // discipline as :routing above; ai-java does not host core-ir, so compileOnly keeps :ir's
     // classes out of claude-provider.jar; testImplementation re-adds it for test code.
-    compileOnly project(":ir")
-    testImplementation project(":ir")
+    githubCompileOnly "intisy-ai:core-ir:1.0.2:ir"
+    githubTestImplementation "intisy-ai:core-ir:1.0.2:ir"
 
     // anthropic-translator's AnthropicTranslator, same thin-jar treatment as :ir above.
     //
@@ -26,8 +26,8 @@ dependencies {
     // `implementation` does not fix it either, because a plain jar task bundles no dependencies.
     // Shipping it needs a packaging decision (a shaded provider jar, or a published translator
     // the host resolves), which is why the scope is left honest rather than made to look solved.
-    compileOnly project(":anthropic")
-    testImplementation project(":anthropic")
+    githubCompileOnly "intisy-ai:anthropic-translator:1.0.1:anthropic"
+    githubTestImplementation "intisy-ai:anthropic-translator:1.0.1:anthropic"
 
     // Phase 6: ClaudeBackend self-assembles Store/HttpClient/JsonCodec/Clock/Random + a real
     // AccountManager from the JVM backends + shared.select.QuotaHealth. ai-java is consumed from

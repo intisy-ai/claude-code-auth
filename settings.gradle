@@ -4,28 +4,6 @@ plugins {
 
 rootProject.name = "claude-code-auth-java"
 
-apply from: file("core/gradle/submodule-modules.gradle")
-
-// :ir - core-ir's canonical IR types and the IrHandler seam a provider implements, from this
-// repo's own core-ir submodule, which is also what src/ imports.
-includeFromSubmodule ":ir", "core-ir"
-
-// :annotations, :processor, :contract, :seam and :js-base come from api, reached through core-ir's
-// own api submodule because :ir exports api's seam types in HandlerCtx's public fields, so every
-// module in this build resolves api at the same coordinates.
-includeFromSubmodule ":annotations", "core-ir/api"
-includeFromSubmodule ":processor", "core-ir/api"
-includeFromSubmodule ":contract", "core-ir/api"
-includeFromSubmodule ":seam", "core-ir/api"
-includeFromSubmodule ":js-base", "core-ir/api"
-
-// :auth-contracts - the provider vocabulary core-auth mints: Provider itself plus the config,
-// catalog, quota and OAuth capabilities ClaudeProvider implements.
-includeFromSubmodule ":auth-contracts", "core-auth"
-
-// :anthropic - the Anthropic translator, from the anthropic-translator submodule.
-includeFromSubmodule ":anthropic", "anthropic-translator"
-
 // :claude-provider - the provider itself. Bucket C (login/TUI/opencode-merge) stays TypeScript.
 include ":claude-provider"
 
@@ -42,7 +20,7 @@ include ":claude-teavm"
 // (antigravity-auth/java/settings.gradle) -- LOCAL DEV-ONLY: only resolves when ai-java is
 // checked out side by side on the same machine. Override with -PaiJavaDir=<path> if your
 // checkout isn't at the default (the unified ai/ tree's java/ai-java).
-def aiJavaDir = file(providers.gradleProperty("aiJavaDir").getOrElse("F:/Documents/GitHub/ai/java/ai-java"))
+def aiJavaDir = file(providers.gradleProperty("aiJavaDir").getOrElse("../../java/ai-java"))
 if (aiJavaDir.isDirectory()) {
     // ai-java's :jvm publishes under the artifactId "ai-java", which Gradle's automatic
     // substitution cannot see (it matches on the project's own group:name, io.github.intisy:jvm),
