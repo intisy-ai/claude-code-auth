@@ -1,8 +1,3 @@
-# The emitted output is compared byte for byte against a fresh emission, and both the processor and
-# TeaVM write LF. Without this, core.autocrlf checks the committed copy out as CRLF and the drift
-# gate fails on a fresh clone while every local run stays green.
-src/generated/* text eol=lf
-
 # A CRLF gradlew is not executable on Linux CI: the shebang is unparseable and the run dies with
 # ENOENT rather than anything that names the real problem.
 gradlew text eol=lf
