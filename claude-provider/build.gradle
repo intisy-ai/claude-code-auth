@@ -4,8 +4,8 @@ dependencies {
     // release-asset jar exports nothing transitively, so each classifier a source imports from is
     // named here, and named again as githubTestImplementation because compileOnly does not reach
     // the test compile classpath.
-    githubCompileOnly "intisy-ai:core-auth:1.3.0:auth-contracts"
-    githubCompileOnly "intisy-ai:core-auth:1.3.0:accounts"
+    githubCompileOnly "intisy-ai:core-auth:1.4.0:auth-contracts"
+    githubCompileOnly "intisy-ai:core-auth:1.4.0:accounts"
     githubCompileOnly "intisy-ai:api:1.2.0:contract"
     githubCompileOnly "intisy-ai:api:1.2.0:seam"
     githubCompileOnly "intisy-ai:api:1.2.0:jvm-seam"
@@ -17,8 +17,8 @@ dependencies {
     // host resolves), which is why the scope is left honest rather than made to look solved.
     githubCompileOnly "intisy-ai:anthropic-translator:1.1.0:anthropic"
 
-    githubTestImplementation "intisy-ai:core-auth:1.3.0:auth-contracts"
-    githubTestImplementation "intisy-ai:core-auth:1.3.0:accounts"
+    githubTestImplementation "intisy-ai:core-auth:1.4.0:auth-contracts"
+    githubTestImplementation "intisy-ai:core-auth:1.4.0:accounts"
     githubTestImplementation "intisy-ai:api:1.2.0:contract"
     githubTestImplementation "intisy-ai:api:1.2.0:seam"
     githubTestImplementation "intisy-ai:api:1.2.0:jvm-seam"

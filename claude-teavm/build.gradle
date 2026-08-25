@@ -10,8 +10,8 @@ dependencies {
     // first-party dependencies are all compileOnly (a thin shipped jar), which does not propagate,
     // so every classifier TeaVM must see bytecode for is declared again here as implementation.
     implementation project(":claude-provider")
-    githubImplementation "intisy-ai:core-auth:1.3.0:auth-contracts"
-    githubImplementation "intisy-ai:core-auth:1.3.0:accounts"
+    githubImplementation "intisy-ai:core-auth:1.4.0:auth-contracts"
+    githubImplementation "intisy-ai:core-auth:1.4.0:accounts"
     githubImplementation "intisy-ai:api:1.2.0:contract"
     // ClaudeProviderJs lives in the SAME package as :js-base (io.github.intisy.ai.js) so it can
     // reference SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.
