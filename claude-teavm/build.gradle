@@ -6,30 +6,19 @@ plugins {
 }
 
 dependencies {
-    // :claude-provider -- AnthropicRequestTranslator/ClaudeQuotaParser are the transpilable
-    // "core" this export reuses verbatim. :claude-provider itself only `compileOnly`s :routing
-    // (keeping its shipped jar thin) -- that does NOT propagate to us, so :routing is declared
-    // again below for the SPI types (JsonCodec) ClaudeProviderJs references directly.
+    // :claude-provider carries the transpilable core this export reuses verbatim. Its own
+    // first-party dependencies are all compileOnly (a thin shipped jar), which does not propagate,
+    // so every classifier TeaVM must see bytecode for is declared again here as implementation.
     implementation project(":claude-provider")
     githubImplementation "intisy-ai:core-auth:1.0.0:auth-contracts"
-    // :claude-provider only `compileOnly`s :ir and :anthropic too (same thin-jar reasoning), which
-    // does not propagate to us, so both are declared again below so the compiled orchestrator JS
-    // bundle actually contains core-ir's IR types and the AnthropicTranslator that
-    // AnthropicRequestTranslator calls into.
+    githubImplementation "intisy-ai:core-auth:1.0.0:accounts"
+    githubImplementation "intisy-ai:api:1.2.0:contract"
+    // ClaudeProviderJs lives in the SAME package as :js-base (io.github.intisy.ai.js) so it can
+    // reference SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.
+    githubImplementation "intisy-ai:api:1.2.0:seam"
+    githubImplementation "intisy-ai:api:1.2.0:js-base"
     githubImplementation "intisy-ai:core-ir:1.0.2:ir"
     githubImplementation "intisy-ai:anthropic-translator:1.0.1:anthropic"
-    // core-proxy's own :teavm js-base (SimpleJsonCodec) -- reused rather than duplicated;
-    // ClaudeProviderJs lives in the SAME package (io.github.intisy.ai.js) so it can reference
-    // SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.
-    githubImplementation "intisy-ai:api:1.0.1:seam"
-    githubImplementation "intisy-ai:api:1.0.1:js-base"
-    // ClaudeHandleOrchestrator.handle calls core-auth's RateLimitMath (io.github.intisy.ai.shared.
-    // select) and ClaudeQuotaParser.accountHasQuota calls QuotaHealth; :claude-provider only
-    // `compileOnly`s ai-java for both (thin-jar reasoning as :routing/:ir/:anthropic above), which
-    // does not propagate here, so TeaVM needs its own real dependency to see the bytecode it
-    // transpiles. Resolved from GitHub Packages Maven (java/build.gradle's repositories block),
-    // same coordinate as :claude-provider's own ai-java dependency.
-    implementation "io.github.intisy:ai-java:1.0.9"
     teavm teavm.libs.jsoApis
 }
 
