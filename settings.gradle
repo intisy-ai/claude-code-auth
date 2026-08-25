@@ -10,32 +10,3 @@ include ":claude-provider"
 // :claude-teavm - TeaVM JS export surface over :claude-provider, reusing :js-base rather than
 // duplicating it.
 include ":claude-teavm"
-
-// ---- test-only composite build -------------------------------------------------------------
-// Pulls ai-java's own Gradle build in (Phase 6 of the JVM claude provider plan) so
-// :claude-provider can `compileOnly`/`testImplementation "io.github.intisy:jvm:0.1.0"` --
-// AccountManager/AccountStore/OAuthConfig (:accounts) and the JVM backends (FileStore/
-// UrlConnectionHttpClient/GsonJsonCodec/SystemClock/SecureRandomAdapter) that Phase 6's
-// self-assembled ClaudeBackend depends on. Mirrors antigravity-auth's identical recipe exactly
-// (antigravity-auth/java/settings.gradle) -- LOCAL DEV-ONLY: only resolves when ai-java is
-// checked out side by side on the same machine. Override with -PaiJavaDir=<path> if your
-// checkout isn't at the default (the unified ai/ tree's java/ai-java).
-def aiJavaDir = file(providers.gradleProperty("aiJavaDir").getOrElse("../../java/ai-java"))
-if (aiJavaDir.isDirectory()) {
-    // ai-java's :jvm publishes under the artifactId "ai-java", which Gradle's automatic
-    // substitution cannot see (it matches on the project's own group:name, io.github.intisy:jvm),
-    // so the compileOnly coordinate below is substituted by hand. Without it a local build
-    // compiles against the last PUBLISHED fat jar rather than the sibling checkout.
-    includeBuild(aiJavaDir) {
-        dependencySubstitution {
-            // Declaring this block turns OFF Gradle's automatic substitution for this included
-            // build, so io.github.intisy:jvm has to be restated alongside the ai-java coordinate.
-            substitute module("io.github.intisy:ai-java") using project(":jvm")
-            substitute module("io.github.intisy:jvm") using project(":jvm")
-        }
-    }
-} else {
-    logger.warn("claude-code-auth java: ai-java not found at ${aiJavaDir} -- the includeBuild-based " +
-            "io.github.intisy:jvm dependency (ClaudeBackend's self-assembled backend) will fail to " +
-            "resolve. Pass -PaiJavaDir=<path-to-ai-java> to point at a different checkout.")
-}
