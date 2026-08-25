@@ -1,0 +1,3 @@
+# A CRLF gradlew is not executable on Linux CI: the shebang is unparseable and the run dies with
+# ENOENT rather than anything that names the real problem.
+gradlew text eol=lf

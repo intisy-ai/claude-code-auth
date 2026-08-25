@@ -1,45 +1,22 @@
 // @ts-nocheck
-// OpenCode entry. Export ONLY the provider plugin: OpenCode runs every export as
-// a hook, so any extra export would register as a bogus plugin.
+// OpenCode entry. OpenCode invokes every exported FUNCTION as a hook, so only the
+// provider plugin is exported as one; the api host reads the non-function default instead.
 // Slash-command / config invocations shell back in as `node <bundle> <action>`;
 // handle those first and exit so they never register the provider.
-import { deployCommands, defineConfig, defineCapabilities, defineReadme, maybeRunReadmeCli, emitEvent } from "@intisy-ai/core";
-import {
-  COMMON_PROVIDER_CAPABILITIES,
-  toCapabilitiesFields,
-  retryBackoffCapabilities,
-  defineProviderPlugin,
-  setActivityEmitter,
-} from "@intisy-ai/core-auth";
-import { CLAUDE_COMMANDS, maybeRunCli } from "./commands.js";
-import { driver, CLAUDE_SETTINGS_SCHEMA, RETRY_KEYS } from "./driver/index.js";
+import { emitEvent } from "@intisy-ai/core";
+import { defineProviderPlugin, setActivityEmitter } from "@intisy-ai/core-auth";
+import { maybeRunCli } from "./commands.js";
+import { driver } from "./driver/index.js";
 
 // Best-effort: let core-auth's account activity (added/removed/login/rate_limited/models_refreshed) flow onto the bus.
 setActivityEmitter((spec: unknown, source: string) => emitEvent(spec, source));
 
-// Registered under the SAME name the driver's settings.ts reads (config/claude-code.json).
-// (The deployed bundle/command name stays "claude-code-auth"; only the config NAME is claude-code.)
+// The readme registration name is the config NAME the driver's settings.ts reads
+// (config/claude-code.json), which the manifest states too; the plugin id stays claude-code-auth.
 export const ClaudeCodeProvider = await defineProviderPlugin({
   name: "claude-code",
-  packageName: "claude-code-auth",
   driver,
-  core: { defineConfig, defineCapabilities, defineReadme, maybeRunReadmeCli, deployCommands },
-  configCliGuard: () => maybeRunCli("claude-code"),
-  defaults: {
-    logging: true,
-    max_account_attempts: 4,
-    account_selection_strategy: "hybrid",
-    default_cooldown_seconds: 60,
-    max_cooldown_seconds: 900,
-  },
-  capabilities: {
-    fields: [
-      ...COMMON_PROVIDER_CAPABILITIES,
-      { key: "logging", type: "boolean", label: "Logging", description: "Write this plugin's log file.", group: "General" },
-      ...toCapabilitiesFields(CLAUDE_SETTINGS_SCHEMA),
-      ...retryBackoffCapabilities(RETRY_KEYS),
-    ],
-  },
+  cliGuard: () => maybeRunCli(),
   readme: {
     description:
       "A [core-auth](https://github.com/intisy-ai/core-auth) provider that signs in to Claude with the real Claude Code OAuth flow and lets you add **multiple Claude subscription accounts**. Both Claude Code (via the loader proxy) and OpenCode route requests through it, rotating accounts and respecting each one's subscription rate limits, so OpenCode uses your Claude Code subscription instead of a pay-per-token API key.",
@@ -72,8 +49,9 @@ export const ClaudeCodeProvider = await defineProviderPlugin({
         "`cli.js`, CLI bundle",
       ],
     },
-    commands: CLAUDE_COMMANDS,
     dependencies: ["core", "core-auth", "sync-bridge"],
   },
-  commands: CLAUDE_COMMANDS,
 });
+
+// ClaudeCodeProvider stays exported too: OpenCode invokes every exported function, while an api host reads the default.
+export { default } from "./plugin.js";
