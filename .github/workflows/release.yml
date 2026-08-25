@@ -39,8 +39,15 @@ jobs:
       ref: ${{ inputs.tag }}
       gradle_test: ''
 
+  readme:
+    needs: merge
+    if: ${{ always() && needs.merge.result == 'success' }}
+    uses: intisy/workflows/.github/workflows/readme.yml@main
+    with:
+      repository: ${{ github.repository }}
+
   publish:
-    needs: test
+    needs: [test, readme]
     if: ${{ always() && needs.test.result == 'success' }}
     uses: intisy/workflows/.github/workflows/publish.yml@main
     with:
@@ -50,16 +57,10 @@ jobs:
       unscoped_name: 'claude-code-auth'
       scope: 'intisy-ai'
       pin_file_deps: true
+      readme_from_default_branch: true
       targets: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') && 'none' || '' }}
       prerelease: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') }}
       npm_pack: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') }}
       generate_release_notes: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') }}
       release_assets: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') && 'release-asset/*.tgz' || '' }}
       jar_module: ${{ !startsWith(inputs.tag || github.ref_name, 'gh-v') && 'claude-provider' || '' }}
-
-  readme:
-    needs: publish
-    if: ${{ always() && needs.publish.result == 'success' && !startsWith(inputs.tag || github.ref_name, 'gh-v') }}
-    uses: intisy/workflows/.github/workflows/readme.yml@main
-    with:
-      repository: ${{ github.repository }}
