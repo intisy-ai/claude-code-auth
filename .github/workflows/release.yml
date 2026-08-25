@@ -27,6 +27,7 @@ jobs:
       source: experimental
       target: main
       sync_back: true
+      generated_paths: ''
 
   # Both downstream jobs carry their own condition: GitHub skips a job whose ANCESTOR was skipped,
   # so without one the skipped merge on a gh-v tag would silently skip the publish too.
