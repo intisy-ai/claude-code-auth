@@ -1,3 +1,4 @@
 {
-  "jarModule": "claude-provider"
+  "jarModule": "claude-provider",
+  "generatedReadme": true
 }

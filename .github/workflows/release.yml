@@ -27,7 +27,7 @@ jobs:
       source: experimental
       target: main
       sync_back: true
-      generated_paths: ''
+      generated_paths: 'README.md'
 
   # Both downstream jobs carry their own condition: GitHub skips a job whose ANCESTOR was skipped,
   # so without one the skipped merge on a gh-v tag would silently skip the publish too.
@@ -46,7 +46,7 @@ jobs:
     with:
       tag: ${{ inputs.tag }}
       patch_ceiling: 20
-      require_clean_readme: true
+      require_clean_readme: false
       unscoped_name: 'claude-code-auth'
       scope: 'intisy-ai'
       pin_file_deps: true
@@ -56,3 +56,10 @@ jobs:
       generate_release_notes: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') }}
       release_assets: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') && 'release-asset/*.tgz' || '' }}
       jar_module: ${{ !startsWith(inputs.tag || github.ref_name, 'gh-v') && 'claude-provider' || '' }}
+
+  readme:
+    needs: publish
+    if: ${{ always() && needs.publish.result == 'success' && !startsWith(inputs.tag || github.ref_name, 'gh-v') }}
+    uses: intisy/workflows/.github/workflows/readme.yml@main
+    with:
+      repository: ${{ github.repository }}
