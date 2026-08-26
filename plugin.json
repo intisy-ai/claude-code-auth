@@ -1,5 +1,5 @@
 {
-  "$schema": "./core/api/schema/plugin.schema.json",
+  "$schema": "./node_modules/@intisy-ai/api/schema/plugin.schema.json",
   "id": "claude-code-auth",
   "api": 1,
   "entry": "dist/index.js",
