@@ -9,6 +9,11 @@
     "provider",
     "settings"
   ],
+  "services": {
+    "consumes": [
+      "provider-support"
+    ]
+  },
   "commands": [
     {
       "name": "claude-accounts",
@@ -26,11 +31,6 @@
       "default_cooldown_seconds": 60,
       "max_cooldown_seconds": 900
     }
-  },
-  "services": {
-    "consumes": [
-      "provider-support"
-    ]
   },
   "publish": {
     "jarModule": [
