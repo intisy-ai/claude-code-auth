@@ -26,7 +26,6 @@
   "files": [
     "dist/",
     "plugin.json",
-    "cairn.json",
     "icon.svg",
     "README.md",
     "LICENSE"
