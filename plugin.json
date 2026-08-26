@@ -27,6 +27,17 @@
       "max_cooldown_seconds": 900
     }
   },
+  "services": {
+    "consumes": [
+      "provider-support"
+    ]
+  },
+  "publish": {
+    "jarModule": [
+      "claude-provider"
+    ],
+    "generatedReadme": true
+  },
   "repo": {
     "role": "Claude Code (Anthropic) provider",
     "category": "ai-provider",
@@ -34,11 +45,8 @@
       "claude",
       "anthropic"
     ],
-    "tech": "typescript"
-  },
-  "services": {
-    "consumes": [
-      "provider-support"
+    "tech": [
+      "typescript"
     ]
   }
 }
