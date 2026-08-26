@@ -9,7 +9,7 @@ dependencies {
     githubCompileOnly "intisy-ai:api:1.2.0:contract"
     githubCompileOnly "intisy-ai:api:1.2.0:seam"
     githubCompileOnly "intisy-ai:api:1.2.0:jvm-seam"
-    githubCompileOnly "intisy-ai:core-ir:1.3.0:ir"
+    githubCompileOnly "intisy-ai:core-ir:1.3.1:ir"
     // NOTE: no host carries anthropic-translator, so a jar-loaded ClaudeProvider hits
     // NoClassDefFoundError the moment handleIr reaches the translator. Switching to
     // `implementation` does not fix it either, because a plain jar task bundles no dependencies.
@@ -22,7 +22,7 @@ dependencies {
     githubTestImplementation "intisy-ai:api:1.2.0:contract"
     githubTestImplementation "intisy-ai:api:1.2.0:seam"
     githubTestImplementation "intisy-ai:api:1.2.0:jvm-seam"
-    githubTestImplementation "intisy-ai:core-ir:1.3.0:ir"
+    githubTestImplementation "intisy-ai:core-ir:1.3.1:ir"
     githubTestImplementation "intisy-ai:anthropic-translator:1.1.0:anthropic"
     // GsonJsonCodec's own dependency, which a release-asset jar does not carry with it. Test-only:
     // at run time the host that loads this provider supplies gson, as it supplies the codec.
