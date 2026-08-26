@@ -1,5 +1,5 @@
 {
-  "$schema": "./core/api/schema/plugin.schema.json",
+  "$schema": "./node_modules/@intisy-ai/api/schema/plugin.schema.json",
   "id": "claude-code-auth",
   "api": 1,
   "entry": "dist/index.js",
@@ -9,6 +9,11 @@
     "provider",
     "settings"
   ],
+  "services": {
+    "consumes": [
+      "provider-support"
+    ]
+  },
   "commands": [
     {
       "name": "claude-accounts",
@@ -27,6 +32,12 @@
       "max_cooldown_seconds": 900
     }
   },
+  "publish": {
+    "jarModule": [
+      "claude-provider"
+    ],
+    "generatedReadme": true
+  },
   "repo": {
     "role": "Claude Code (Anthropic) provider",
     "category": "ai-provider",
@@ -34,11 +45,8 @@
       "claude",
       "anthropic"
     ],
-    "tech": "typescript"
-  },
-  "services": {
-    "consumes": [
-      "provider-support"
+    "tech": [
+      "typescript"
     ]
   }
 }
