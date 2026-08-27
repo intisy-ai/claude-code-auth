@@ -37,7 +37,7 @@ jobs:
     uses: intisy/workflows/.github/workflows/test.yml@main
     with:
       ref: ${{ inputs.tag }}
-      gradle_test: ''
+      gradle_test: check
 
   readme:
     needs: merge
