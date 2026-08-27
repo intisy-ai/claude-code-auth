@@ -4,7 +4,7 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups, type ProviderSettingsSchema } from "@intisy-ai/core-auth";
+import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups, type ProviderSettingsSchema, type ProviderSort } from "@intisy-ai/core-auth";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
@@ -106,7 +106,7 @@ export const driver = {
   appNpm: "@ai-sdk/anthropic",
   models,
   fetchModels,
-  sorts: ["leaderboard"],   // opt into core's built-in quality sort (manual is automatic)
+  sorts: ["leaderboard"] satisfies ProviderSort[],   // opt into core's built-in quality sort (manual is automatic)
   handleIr,
   login,
   loginFlow,
