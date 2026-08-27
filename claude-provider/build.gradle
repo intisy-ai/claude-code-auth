@@ -15,7 +15,7 @@ dependencies {
     // `implementation` does not fix it either, because a plain jar task bundles no dependencies.
     // Shipping it needs a packaging decision (a shaded provider jar, or a published translator the
     // host resolves), which is why the scope is left honest rather than made to look solved.
-    githubCompileOnly "intisy-ai:anthropic-translator:1.1.1:anthropic"
+    githubCompileOnly "intisy-ai:anthropic-translator:1.2.0:anthropic"
 
     githubTestImplementation "intisy-ai:core-auth:2.0.0:auth-contracts"
     githubTestImplementation "intisy-ai:core-auth:2.0.0:accounts"
@@ -23,7 +23,7 @@ dependencies {
     githubTestImplementation "intisy-ai:api:1.6.0:seam"
     githubTestImplementation "intisy-ai:api:1.6.0:jvm-seam"
     githubTestImplementation "intisy-ai:core-ir:1.4.0:ir"
-    githubTestImplementation "intisy-ai:anthropic-translator:1.1.1:anthropic"
+    githubTestImplementation "intisy-ai:anthropic-translator:1.2.0:anthropic"
     // GsonJsonCodec's own dependency, which a release-asset jar does not carry with it. Test-only:
     // at run time the host that loads this provider supplies gson, as it supplies the codec.
     testImplementation "com.google.code.gson:gson:2.10.1"
