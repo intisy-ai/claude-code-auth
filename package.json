@@ -46,7 +46,7 @@
     "build": "node node_modules/@intisy-ai/api/scripts/teavm-build.mjs --java-dir . --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && node build.mjs",
     "postbuild": "node dist/index.js readme",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && vitest run",
+    "test": "npm run typecheck && npm run build && vitest run",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

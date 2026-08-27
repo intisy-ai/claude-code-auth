@@ -4,7 +4,7 @@
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups } from "@intisy-ai/core-auth";
+import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups, type ProviderSettingsSchema } from "@intisy-ai/core-auth";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
@@ -25,7 +25,7 @@ const PROVIDER_ID = "claude-code";
 // antigravity's own key names) so an existing user's config value is never silently dropped.
 export const RETRY_KEYS = { baseKey: "default_cooldown_seconds", maxKey: "max_cooldown_seconds" };
 
-export const CLAUDE_SETTINGS_SCHEMA = [
+export const CLAUDE_SETTINGS_SCHEMA: ProviderSettingsSchema = [
   {
     title: "Account rotation",
     fields: [
