@@ -17,7 +17,7 @@ dependencies {
     // reference SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.
     githubImplementation "intisy-ai:api:1.6.0:seam"
     githubImplementation "intisy-ai:api:1.6.0:js-base"
-    githubImplementation "intisy-ai:core-ir:1.3.1:ir"
+    githubImplementation "intisy-ai:core-ir:1.4.0:ir"
     githubImplementation "intisy-ai:anthropic-translator:1.1.1:anthropic"
     teavm teavm.libs.jsoApis
 }
