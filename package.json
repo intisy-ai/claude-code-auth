@@ -43,7 +43,7 @@
     ]
   },
   "scripts": {
-    "build": "node node_modules/@intisy-ai/api/scripts/teavm-build.mjs --java-dir . --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && node build.mjs",
+    "build": "node node_modules/@intisy/bayonet/scripts/teavm-build.mjs --java-dir . --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && node build.mjs",
     "postbuild": "node dist/index.js readme",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && npm run build && vitest run",
@@ -55,7 +55,7 @@
     "@openauthjs/openauth": "^0.4.3"
   },
   "devDependencies": {
-    "@intisy-ai/api": "^1.0.2",
+    "@intisy/bayonet": "^1.7.0",
     "@types/node": "^22.19.19",
     "esbuild": "^0.25.12",
     "typescript": "^5.0.0",
