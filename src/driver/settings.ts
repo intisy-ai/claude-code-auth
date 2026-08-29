@@ -3,8 +3,8 @@
 // (config/claude-code.json), read/written via core getConfigValue/setConfigValue.
 // Distinct from config.ts, which holds the OAuth client config.
 
-import { getConfigValue, setConfigValue } from "@intisy-ai/core";
-import { coercePositiveInt } from "@intisy-ai/core-auth";
+import { getConfigValue, setConfigValue } from "@intisy-ai/basekit";
+import { coercePositiveInt } from "@intisy-ai/basekit/auth";
 
 const PACKAGE_NAME = "claude-code";
 const DEFAULT_MAX_ATTEMPTS = 4;
@@ -27,7 +27,7 @@ export function getMaxAttempts(): number {
   return coercePositiveInt(getSetting("max_account_attempts", DEFAULT_MAX_ATTEMPTS), DEFAULT_MAX_ATTEMPTS);
 }
 
-// Account selection strategy passed to core-auth's AccountManager at construction.
+// Account selection strategy passed to basekit/auth's AccountManager at construction.
 export function getSelection(): string {
   const value = getSetting("account_selection_strategy", DEFAULT_SELECTION);
   return SELECTION_STRATEGIES.includes(value) ? value : DEFAULT_SELECTION;

@@ -1,8 +1,8 @@
 // @ts-nocheck
 // Claude's AccountController: provider-owned status + Verify / Refresh actions on
-// top of core-auth's generic list/enable/remove helper.
+// top of basekit/auth's generic list/enable/remove helper.
 
-import { accountControllerFromManager, verifyAllAccounts, refreshAccountToken, hasCapacity } from "@intisy-ai/core-auth";
+import { accountControllerFromManager, verifyAllAccounts, refreshAccountToken, hasCapacity } from "@intisy-ai/basekit/auth";
 import { ANTHROPIC_API_BASE, ANTHROPIC_OAUTH_BETA, ANTHROPIC_VERSION, CLAUDE_CODE_SYSTEM } from "../constants.js";
 import { login } from "./login.js";
 
@@ -97,7 +97,7 @@ function poolLabel(bucket) {
   return m[3] ? base + " (" + m[3].charAt(0).toUpperCase() + m[3].slice(1) + ")" : base;
 }
 
-// Map the stored pools to core-auth's quota shape [{label, remainingFraction, resetTime}].
+// Map the stored pools to basekit/auth's quota shape [{label, remainingFraction, resetTime}].
 function claudeQuota(account) {
   const q = account.cachedQuota;
   if (!q) return undefined;
@@ -179,7 +179,7 @@ async function verify(manager, view) {
   }
 }
 
-// Quota still remaining? Maps the account's own pools shape into core-auth's neutral
+// Quota still remaining? Maps the account's own pools shape into basekit/auth's neutral
 // {remainingFraction}[] and defers the "any pool with capacity left" decision to quota-health.ts.
 // Unknown -> false.
 export function accountHasQuota(account) {

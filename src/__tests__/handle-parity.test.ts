@@ -70,7 +70,7 @@ const H = vi.hoisted(() => {
   return { harness, FakeAccountManager, fakeProxyManager };
 });
 
-vi.mock("@intisy-ai/core-auth", async (importOriginal) => {
+vi.mock("@intisy-ai/basekit/auth", async (importOriginal) => {
   const actual: any = await importOriginal();
   return {
     ...actual,

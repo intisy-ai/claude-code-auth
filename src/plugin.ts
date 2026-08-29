@@ -1,6 +1,6 @@
 import type { Plugin, PluginContext } from "@intisy-ai/api";
-import type { Provider, ProviderSupport } from "@intisy-ai/core-auth";
-import type { SettingsCapability } from "@intisy-ai/core";
+import type { Provider, ProviderSupport } from "@intisy-ai/basekit/auth";
+import type { SettingsCapability } from "@intisy-ai/basekit";
 import { driver } from "./driver/index.js";
 import { CLAUDE_SETTINGS } from "./settings.js";
 

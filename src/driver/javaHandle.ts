@@ -6,7 +6,7 @@
 // over the real manager, building the final Response). The provider-facing entry point is the
 // IR-native handleIr; handleViaJavaOrchestrator is its internal transport/orchestration core.
 
-import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse, initCoreAuth } from "@intisy-ai/core-auth";
+import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse, initCoreAuth } from "@intisy-ai/basekit/auth";
 import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
@@ -35,7 +35,7 @@ function headersFromJson(headersJson) {
 export async function handleViaJavaOrchestrator(request, ctx) {
   const log = (ctx && ctx.log) || (() => {});
 
-  // Defense-in-depth: manager.acquire(lane) already self-inits core-auth as the first action of
+  // Defense-in-depth: manager.acquire(lane) already self-inits basekit/auth as the first action of
   // every attempt loop iteration, before any of the sync jsReports callbacks below can fire for
   // that same iteration. Awaited here too so a future caller can never race it.
   await initCoreAuth();
@@ -183,13 +183,13 @@ export async function handleViaJavaOrchestrator(request, ctx) {
 const IR_SYNTHETIC_URL = "https://loader.local/v1/messages";
 
 // Non-2xx responses out of handleIr (real upstream "surface as-is", or one of the orchestrator's
-// own SYNTHETIC error bodies: chatErrorBody/errorResponseBody) are carried out via core-auth's
+// own SYNTHETIC error bodies: chatErrorBody/errorResponseBody) are carried out via basekit/auth's
 // canonical HandleIrError, not returned as data. Neither body is guaranteed to be Anthropic
 // MESSAGE-shaped JSON (a SYNTHETIC body in particular can be missing the "type":"error" wrapper
 // entirely, see errorResponseBody), so forcing it through anthropicTranslator.decodeResponse
 // would corrupt it: the codec always injects id/content/model/stop_reason keys a bare error
 // envelope never had. handleIr throws HandleIrError instead, carrying the EXACT original bytes;
-// the front-door (core-proxy's server.ts/Router.java) catches this typed error and reconstructs
+// the front-door (basekit/proxy's server.ts/Router.java) catches this typed error and reconstructs
 // the response verbatim, restoring status fidelity on the IR path, so re-export it for
 // callers that only import from this module.
 export { HandleIrError };
@@ -200,7 +200,7 @@ export { HandleIrError };
  * then decodes a genuine 2xx response back to the canonical IR: a streamed SSE response becomes
  * a true-streaming IrEventStream (never buffered); a non-streaming response becomes an
  * IrResponse. Any non-2xx outcome throws {@link HandleIrError} rather than forcing a non-message
- * body through the IR (see its own comment above), mirroring core-proxy's own reference handleIr
+ * body through the IR (see its own comment above), mirroring basekit/proxy's own reference handleIr
  * contract, where a provider signals failure by throwing, not by returning IR.
  */
 export async function handleIr(ir, ctx) {

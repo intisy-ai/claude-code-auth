@@ -1,11 +1,11 @@
 // @ts-nocheck
 import { describe, it, expect, beforeAll } from "vitest";
 import { accountHasQuota } from "./accounts-controller.js";
-import { initCoreAuth } from "@intisy-ai/core-auth";
+import { initCoreAuth } from "@intisy-ai/basekit/auth";
 
 describe("accountHasQuota (claude-code)", () => {
-  // accountHasQuota now delegates to core-auth's quota-health.ts (getCoreAuth().quotaHasCapacity),
-  // which throws unless core-auth has been initialized. This test calls accountHasQuota directly,
+  // accountHasQuota now delegates to basekit/auth's quota-health.ts (getCoreAuth().quotaHasCapacity),
+  // which throws unless basekit/auth has been initialized. This test calls accountHasQuota directly,
   // not through AccountManager.acquire/ensureAccess (which self-init), so it needs its own init.
   beforeAll(async () => {
     await initCoreAuth();

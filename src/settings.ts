@@ -1,7 +1,7 @@
 // What each of this provider's settings is called and how a surface renders it, beside the values
 // the manifest declares. Data the settings capability answers with.
-import { COMMON_PROVIDER_CAPABILITIES, toCapabilitiesFields, retryBackoffCapabilities } from "@intisy-ai/core-auth";
-import type { CapabilitySchema } from "@intisy-ai/core";
+import { COMMON_PROVIDER_CAPABILITIES, toCapabilitiesFields, retryBackoffCapabilities } from "@intisy-ai/basekit/auth";
+import type { CapabilitySchema } from "@intisy-ai/basekit";
 import { CLAUDE_SETTINGS_SCHEMA, RETRY_KEYS } from "./driver/index.js";
 
 export const CLAUDE_SETTINGS: CapabilitySchema = {

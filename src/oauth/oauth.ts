@@ -5,7 +5,7 @@
 // string the user pastes back (Claude Code's manual flow).
 
 import { generatePKCE } from "@openauthjs/openauth/pkce";
-import { encodeState, decodeState, calculateTokenExpiry } from "@intisy-ai/core-auth";
+import { encodeState, decodeState, calculateTokenExpiry } from "@intisy-ai/basekit/auth";
 import {
   CLAUDE_AUTHORIZE_URL,
   CLAUDE_CLIENT_ID,

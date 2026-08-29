@@ -56,7 +56,7 @@ subprojects {
         accessToken = System.getenv("GITHUB_TOKEN") ?: ""
     }
 
-    // Only :claude-provider is a published artifact (:routing/:teavm are aliased from core-proxy,
+    // Only :claude-provider is a published artifact (:routing/:teavm are aliased from basekit,
     // :claude-teavm is a TeaVM js-export module) -- scope publishGithub so an aggregate `publish`
     // doesn't fail on the non-library modules.
     tasks.matching { it.name == "publishGithub" }.configureEach {

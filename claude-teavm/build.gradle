@@ -10,14 +10,14 @@ dependencies {
     // first-party dependencies are all compileOnly (a thin shipped jar), which does not propagate,
     // so every classifier TeaVM must see bytecode for is declared again here as implementation.
     implementation project(":claude-provider")
-    githubImplementation "intisy-ai:core-auth:2.0.0:auth-contracts"
-    githubImplementation "intisy-ai:core-auth:2.0.0:accounts"
+    githubImplementation "intisy-ai:basekit:4.0.0:auth-contracts"
+    githubImplementation "intisy-ai:basekit:4.0.0:accounts"
     githubImplementation "intisy-ai:api:1.7.0:contract"
     // ClaudeProviderJs lives in the SAME package as :js-base (io.github.intisy.ai.js) so it can
     // reference SimpleJsonCodec unqualified, exactly like CoreProxyJs/StubProviderJs do.
     githubImplementation "intisy-ai:api:1.7.0:seam"
     githubImplementation "intisy-ai:api:1.7.0:js-base"
-    githubImplementation "intisy-ai:core-ir:1.4.0:ir"
+    githubImplementation "intisy-ai:basekit:4.0.0:ir"
     githubImplementation "intisy-ai:anthropic-translator:1.2.0:anthropic"
     teavm teavm.libs.jsoApis
 }
@@ -28,7 +28,7 @@ dependencies {
 // :claude-teavm needs a newer compile target than :claude-provider -- override both the
 // extension's compatibility (fixes Gradle's dependency-resolution JVM-version attribute
 // matching) and the compileJava task's --release option. Mirrors stub-auth's stub-teavm/
-// build.gradle exactly (which itself mirrors core-proxy/java/teavm/build.gradle).
+// build.gradle exactly (which itself mirrors basekit's proxy-teavm/build.gradle).
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17

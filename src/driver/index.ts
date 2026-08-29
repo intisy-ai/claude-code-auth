@@ -1,10 +1,10 @@
 // @ts-nocheck
-// The claude-code driver: a thin object on top of core-auth. core-auth owns
+// The claude-code driver: a thin object on top of basekit/auth. basekit/auth owns
 // account storage, selection, token refresh, and rate-limit/cooldown state; this
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups, type ProviderSettingsSchema, type ProviderSort } from "@intisy-ai/core-auth";
+import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups, type ProviderSettingsSchema, type ProviderSort } from "@intisy-ai/basekit/auth";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
@@ -66,7 +66,7 @@ async function handleIr(ir, ctx) {
 
 // Live model catalog: pull the account's available models from Anthropic /v1/models
 // so "Refresh models" (and login) actually update the list instead of re-reading the
-// static fallback. core-auth's resolveProviderModels calls this when an account exists
+// static fallback. basekit/auth's resolveProviderModels calls this when an account exists
 // and falls back to the static `models` above on null/failure. Uses ensureAccess (no
 // rotation side effects) rather than acquire().
 async function fetchModels(ctx) {

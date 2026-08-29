@@ -2,7 +2,7 @@
 // The CLI action behind this provider's slash command, which the manifest declares and a host
 // deploys. It shells back into this same bundle (`node <bundle> accounts`), so maybeRunCli runs the
 // action and the process exits before the provider boots.
-import { printAccounts } from "@intisy-ai/core-auth";
+import { printAccounts } from "@intisy-ai/basekit/auth";
 import { driver } from "./driver/index.js";
 
 const PROVIDER_ID = "claude-code";

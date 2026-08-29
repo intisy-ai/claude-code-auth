@@ -1,5 +1,5 @@
 // Universal plugin contract via core's shared test-kit.
-import { runPluginContract } from "@intisy-ai/core/testing";
+import { runPluginContract } from "@intisy-ai/basekit/testing";
 
 runPluginContract({
   name: "claude-code-auth",

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { providerSupport } from "@intisy-ai/core-auth";
+import { providerSupport } from "@intisy-ai/basekit/auth";
 
 const handleIr = vi.fn(async () => ({ id: "answered" }));
 

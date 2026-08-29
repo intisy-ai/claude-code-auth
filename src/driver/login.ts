@@ -1,10 +1,10 @@
 // @ts-nocheck
 // Claude Code OAuth login. Everything generic (the settled guard, rebuilding a missing state,
-// saving the account, the CLI prompt) comes from core-auth's defineOAuthLogin; what is left
+// saving the account, the CLI prompt) comes from basekit/auth's defineOAuthLogin; what is left
 // here is Claude's own. The redirect lands on platform.claude.com and shows a `code#state`
 // string the user pastes back, so there is no localhost loopback to listen on.
 
-import { defineOAuthLogin } from "@intisy-ai/core-auth";
+import { defineOAuthLogin } from "@intisy-ai/basekit/auth";
 import { authorizeClaude, exchangeClaude } from "../oauth/oauth.js";
 
 export const { loginFlow, login } = defineOAuthLogin({

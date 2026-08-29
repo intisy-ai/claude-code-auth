@@ -3,12 +3,12 @@
 // provider plugin is exported as one; the api host reads the non-function default instead.
 // Slash-command / config invocations shell back in as `node <bundle> <action>`;
 // handle those first and exit so they never register the provider.
-import { emitEvent } from "@intisy-ai/core";
-import { defineProviderPlugin, setActivityEmitter } from "@intisy-ai/core-auth";
+import { emitEvent } from "@intisy-ai/basekit";
+import { defineProviderPlugin, setActivityEmitter } from "@intisy-ai/basekit/auth";
 import { maybeRunCli } from "./commands.js";
 import { driver } from "./driver/index.js";
 
-// Best-effort: let core-auth's account activity (added/removed/login/rate_limited/models_refreshed) flow onto the bus.
+// Best-effort: let basekit/auth's account activity (added/removed/login/rate_limited/models_refreshed) flow onto the bus.
 setActivityEmitter((spec: unknown, source: string) => emitEvent(spec, source));
 
 // The readme registration name is the config NAME the driver's settings.ts reads
@@ -19,13 +19,13 @@ export const ClaudeCodeProvider = await defineProviderPlugin({
   cliGuard: () => maybeRunCli(),
   readme: {
     description:
-      "A [core-auth](https://github.com/intisy-ai/core-auth) provider that signs in to Claude with the real Claude Code OAuth flow and lets you add **multiple Claude subscription accounts**. Both Claude Code (via the loader proxy) and OpenCode route requests through it, rotating accounts and respecting each one's subscription rate limits, so OpenCode uses your Claude Code subscription instead of a pay-per-token API key.",
+      "A [basekit/auth](https://github.com/intisy-ai/basekit) provider that signs in to Claude with the real Claude Code OAuth flow and lets you add **multiple Claude subscription accounts**. Both Claude Code (via the loader proxy) and OpenCode route requests through it, rotating accounts and respecting each one's subscription rate limits, so OpenCode uses your Claude Code subscription instead of a pay-per-token API key.",
     architecture: `flowchart TD
-    subgraph Driver [claude-code driver, thin layer on core-auth]
+    subgraph Driver [claude-code driver, thin layer on basekit auth]
         HANDLE["handle(request), Anthropic request rewrite"]
         LOGIN["loginFlow(), PKCE OAuth"]
     end
-    subgraph Core [core-auth]
+    subgraph Core [basekit auth]
         MGR[AccountManager: select / refresh / rotate]
         STORE[(accounts.json)]
         MGR <--> STORE
@@ -38,7 +38,7 @@ export const ClaudeCodeProvider = await defineProviderPlugin({
     LOGIN -->|platform.claude.com OAuth| STORE`,
     structure: {
       src: [
-        "`driver/`, driver + OAuth config/login (request prep now round-trips through core-ir, java/claude-provider)",
+        "`driver/`, driver + OAuth config/login (request prep now round-trips through basekit/ir, java/claude-provider)",
         "`oauth/`, PKCE flow",
         "`commands.ts`, slash-commands",
         "`handler.ts`/`index.ts`/`cli.ts`, entries",
@@ -49,7 +49,7 @@ export const ClaudeCodeProvider = await defineProviderPlugin({
         "`cli.js`, CLI bundle",
       ],
     },
-    dependencies: ["core", "core-auth", "sync-bridge"],
+    dependencies: ["basekit", "sync-bridge"],
   },
 });
 
