@@ -4,6 +4,13 @@
 
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 
+// The handler context a host really hands over: `log` is a Logger, not a function. It was a bare
+// function here while basekit/proxy carried a second, hand-written HandlerCtx beside the emitted one.
+function testCtx(): any {
+  const noop = () => {};
+  return { configDir: "", handlerId: "", log: { debug: noop, info: noop, warn: noop, error: noop }, model: "", store: null };
+}
+
 const H = vi.hoisted(() => {
   const harness: any = {
     accounts: [],
@@ -156,7 +163,7 @@ async function runJavaPath(sc: any) {
     body: sc.body ?? JSON.stringify({ model: "claude-sonnet-4", messages: [] }),
   });
   resetForRun(sc);
-  const jvResp = await handleViaJavaOrchestrator(makeReq(), { model: "", log: () => {} });
+  const jvResp = await handleViaJavaOrchestrator(makeReq(), testCtx());
   return { snap: await snapshotResponse(jvResp), calls: normalizeCalls(harness.calls.slice()), outbound: harness.outbound.slice() };
 }
 
@@ -354,7 +361,7 @@ describe("SP-3 T2: handleIr (IR-native entry point)", () => {
       }))],
     };
     resetForRun(sc);
-    const result = await handleIr(sampleIrRequest(), { model: "", log: () => {} });
+    const result = await handleIr(sampleIrRequest(), testCtx());
     expect(result.id).toBe("msg_1");
     expect(result.stopReason).toBe("end_turn");
     expect(result.content[0]).toMatchObject({ kind: "text", text: "hi" });
@@ -363,7 +370,7 @@ describe("SP-3 T2: handleIr (IR-native entry point)", () => {
   it("throws HandleIrError (never a decoded IrResponse) for a SYNTHETIC no-account outcome", async () => {
     const sc = scenarios.find((s) => s.name.includes("no enabled account"));
     resetForRun(sc);
-    await expect(handleIr(sampleIrRequest(), { model: "", log: () => {} }))
+    await expect(handleIr(sampleIrRequest(), testCtx()))
       .rejects.toBeInstanceOf(HandleIrError);
   });
 
@@ -372,7 +379,7 @@ describe("SP-3 T2: handleIr (IR-native entry point)", () => {
     resetForRun(sc);
     let caught;
     try {
-      await handleIr(sampleIrRequest(), { model: "", log: () => {} });
+      await handleIr(sampleIrRequest(), testCtx());
     } catch (error) {
       caught = error;
     }
@@ -395,7 +402,7 @@ describe("SP-3 T2: handleIr (IR-native entry point)", () => {
       fetch: [resp(200, { "content-type": "text/event-stream" }, sse)],
     };
     resetForRun(sc);
-    const result = await handleIr(sampleIrRequest(true), { model: "", log: () => {} });
+    const result = await handleIr(sampleIrRequest(true), testCtx());
     expect(result).toBeInstanceOf(ReadableStream);
     const events = await collectStream(result);
     expect(events.map((e) => e.event)).toEqual([

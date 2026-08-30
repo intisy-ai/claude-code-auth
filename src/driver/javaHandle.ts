@@ -9,7 +9,6 @@ import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonPar
 import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
-import { diagnostic } from "./diagnostics.js";
 import { anthropicTranslator } from "@intisy-ai/anthropic-translator";
 import type { HandlerCtx, IrRequest, IrResponse, IrStreamEvent } from "@intisy-ai/basekit/ir";
 
@@ -56,7 +55,7 @@ function headersFromJson(headersJson: string): Headers {
  * @returns the upstream response, retained verbatim so a stream stays intact, or a synthetic one
  */
 export async function handleViaJavaOrchestrator(request: Request, ctx: HandlerCtx): Promise<Response> {
-  const log = diagnostic(ctx);
+  const log = (message: string) => { ctx.log.warn(message); };
 
   // Defense-in-depth: manager.acquire(lane) already self-inits basekit/auth as the first action of
   // every attempt loop iteration, before any of the sync jsReports callbacks below can fire for
