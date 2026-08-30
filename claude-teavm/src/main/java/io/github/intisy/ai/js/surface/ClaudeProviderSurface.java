@@ -1,11 +1,9 @@
 package io.github.intisy.ai.js.surface;
 
 import io.github.intisy.ai.tsemit.TsModule;
-import io.github.intisy.ai.tsemit.TsRaw;
 
 import java.util.concurrent.CompletionStage;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 /**
  * claude-code-auth's JavaScript module surface, typed for a TypeScript consumer.
@@ -117,11 +115,6 @@ public interface ClaudeProviderSurface {
             String inputsJson,
             String configJson,
             BiFunction<String, String, CompletionStage<String>> jsExec,
-            // The one escape here: the bridge documents that a JS null means "no account free" and
-            // collapses it, and the processor has no way to make a type argument nullable inside a
-            // functional-interface parameter. Emitting `Promise<string>` would be a lie the host
-            // then has to suppress.
-            @TsRaw("((lane: string) => Promise<string | null>)")
-            Function<String, CompletionStage<String>> jsAcquire,
+            ClaudeAcquireFn jsAcquire,
             ClaudeReportsShape jsReports);
 }

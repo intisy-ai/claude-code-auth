@@ -22,4 +22,5 @@ it("keeps the committed seam declarations identical to what the java emits", () 
     expect(readFileSync(join(scratch, name), "utf8"))
       .toBe(readFileSync(join(repo, "src", "generated", name), "utf8"));
   }
-});
+  // This spawns a gradle build, which vitest's five-second default cannot cover on a loaded machine.
+}, 300_000);

@@ -103,7 +103,7 @@ export declare function fetchModelsMapping(modelsJson: string): string;
  * @param jsReports - what the loop tells the host about each attempt
  * @returns the decision as JSON: which attempt to serve, or a synthetic response to answer with
  */
-export declare function handleClaudeRequestAsync(inputsJson: string, configJson: string, jsExec: ((a: string, b: string) => Promise<string>), jsAcquire: ((lane: string) => Promise<string | null>), jsReports: ClaudeReportsShape): Promise<string>;
+export declare function handleClaudeRequestAsync(inputsJson: string, configJson: string, jsExec: ((a: string, b: string) => Promise<string>), jsAcquire: ClaudeAcquireFn, jsReports: ClaudeReportsShape): Promise<string>;
 /**
  * The answer this provider gives when no account is configured at all.
  *
@@ -140,4 +140,7 @@ export declare function poolLabel(bucket: string): string;
  * @returns the resolved model id
  */
 export declare function resolveAutoModel(bodyJson: string, ctxModel: string, topAutoCandidate: string): string;
+
+/** The host's account rotation, which answers with the account it picked or with nothing. */
+export type ClaudeAcquireFn = (lane: string) => Promise<string | null>;
 
