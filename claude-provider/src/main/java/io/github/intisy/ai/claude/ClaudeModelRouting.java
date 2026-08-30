@@ -24,6 +24,10 @@ public final class ClaudeModelRouting {
     private ClaudeModelRouting() {
     }
 
+    /**
+     * @param status the HTTP status the upstream answered with
+     * @return whether it means a rate limit rather than another failure
+     */
     public static boolean isRateLimitStatus(int status) {
         return status == 429 || status == 529;
     }
@@ -56,6 +60,12 @@ public final class ClaudeModelRouting {
      * falls back to returning {@code bodyText} unchanged, a deliberate, documented safety
      * divergence from an unreachable TS bug rather than an "improvement" to any reachable
      * behavior.
+     *
+     * @param json the codec to read and rewrite the body with
+     * @param bodyText the request body
+     * @param ctxModel the model the router assigned
+     * @param topAutoCandidate the leaderboard's first choice, which stays the host's to rank
+     * @return the body naming a concrete model, or unchanged when none had to be resolved
      */
     @SuppressWarnings("unchecked")
     public static String resolveAutoModel(JsonCodec json, String bodyText, String ctxModel, String topAutoCandidate) {
@@ -85,6 +95,12 @@ public final class ClaudeModelRouting {
      * {@code String}-typed {@code assigned.equals(currentModel)} either, since {@code equals}
      * across differing types is also always {@code false} -- so this matches the TS strict
      * comparison's behavior for every JSON value type, not just strings).
+     *
+     * @param json the codec to read and rewrite the body with
+     * @param bodyText the request body
+     * @param ctxModel the model the router assigned
+     * @param log where the rewrite's diagnostics go
+     * @return the body naming the assigned model, or unchanged when there was none to assign
      */
     @SuppressWarnings("unchecked")
     public static String applyAssignedModel(JsonCodec json, String bodyText, String ctxModel, Logger log) {
@@ -110,6 +126,10 @@ public final class ClaudeModelRouting {
      * (TS: {@code null}) when {@code modelsJson} fails to parse, has no usable top-level {@code
      * data} array, or the filtered result is empty -- matches every TS early-return in
      * {@code fetchModels}'s mapping half exactly.
+     *
+     * @param json the codec to read and build with
+     * @param modelsJson what the upstream answered
+     * @return the models as a JSON object keyed by model id
      */
     @SuppressWarnings("unchecked")
     public static String fetchModelsMapping(JsonCodec json, String modelsJson) {

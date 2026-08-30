@@ -13,6 +13,7 @@ import io.github.intisy.ai.api.seam.JsonCodec;
 public final class IrJsonCodecAdapter implements io.github.intisy.ai.ir.spi.JsonCodec {
     private final JsonCodec delegate;
 
+    /** @param delegate the codec every call is forwarded to */
     public IrJsonCodecAdapter(JsonCodec delegate) {
         this.delegate = delegate;
     }

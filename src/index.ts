@@ -1,18 +1,18 @@
-// @ts-nocheck
 // OpenCode entry. OpenCode invokes every exported FUNCTION as a hook, so only the
 // provider plugin is exported as one; the api host reads the non-function default instead.
 // Slash-command / config invocations shell back in as `node <bundle> <action>`;
 // handle those first and exit so they never register the provider.
-import { emitEvent } from "@intisy-ai/basekit";
+import { emitEvent, type ActivitySpec } from "@intisy-ai/basekit";
 import { defineProviderPlugin, setActivityEmitter } from "@intisy-ai/basekit/auth";
 import { maybeRunCli } from "./commands.js";
 import { driver } from "./driver/index.js";
 
 // Best-effort: let basekit/auth's account activity (added/removed/login/rate_limited/models_refreshed) flow onto the bus.
-setActivityEmitter((spec: unknown, source: string) => emitEvent(spec, source));
+setActivityEmitter((spec: ActivitySpec, source: string) => emitEvent(spec, source));
 
 // The readme registration name is the config NAME the driver's settings.ts reads
 // (config/claude-code.json), which the manifest states too; the plugin id stays claude-code-auth.
+/** What an app that invokes every exported function loads; an api host reads the default export. */
 export const ClaudeCodeProvider = await defineProviderPlugin({
   name: "claude-code",
   driver,

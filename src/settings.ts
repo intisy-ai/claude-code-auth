@@ -4,6 +4,7 @@ import { COMMON_PROVIDER_CAPABILITIES, toCapabilitiesFields, retryBackoffCapabil
 import type { CapabilitySchema } from "@intisy-ai/basekit";
 import { CLAUDE_SETTINGS_SCHEMA, RETRY_KEYS } from "./driver/index.js";
 
+/** This provider's settings and actions, as a capability surface renders them. */
 export const CLAUDE_SETTINGS: CapabilitySchema = {
   fields: [
     ...COMMON_PROVIDER_CAPABILITIES,

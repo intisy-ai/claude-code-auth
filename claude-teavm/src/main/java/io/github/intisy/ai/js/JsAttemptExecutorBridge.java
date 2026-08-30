@@ -51,12 +51,21 @@ public final class JsAttemptExecutorBridge implements ClaudeHandleOrchestrator.A
      */
     @JSFunctor
     public interface JsExecFn extends JSObject {
+        /**
+         * @param accountId the account to attempt with
+         * @param preparedJson the request to send, as JSON
+         * @return a promise of the attempt's outcome, as JSON
+         */
         JSPromise<JSString> execute(JSString accountId, JSString preparedJson);
     }
 
     private final JsExecFn jsExec;
     private final JsonCodec json;
 
+    /**
+     * @param jsExec the host's transport
+     * @param json the codec this bridge serialises and parses with
+     */
     public JsAttemptExecutorBridge(JsExecFn jsExec, JsonCodec json) {
         this.jsExec = jsExec;
         this.json = json;

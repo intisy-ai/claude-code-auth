@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Claude Code OAuth (PKCE S256). authorizeClaude() builds the authorization URL;
 // exchangeClaude() trades the pasted code for refresh/access tokens. The redirect
 // is platform.claude.com/oauth/code/callback, which displays a `code#state`
@@ -14,6 +13,11 @@ import {
   CLAUDE_TOKEN_URL,
 } from "../constants.js";
 
+/**
+ * Starts a login: the URL to open, and the verifier its exchange needs.
+ *
+ * @returns the authorize URL and the PKCE verifier
+ */
 export async function authorizeClaude() {
   const pkce = await generatePKCE();
   const url = new URL(CLAUDE_AUTHORIZE_URL);
@@ -28,7 +32,14 @@ export async function authorizeClaude() {
   return { url: url.toString(), verifier: pkce.verifier };
 }
 
-export async function exchangeClaude(code, state) {
+/**
+ * Exchanges an authorization code for a token.
+ *
+ * @param code - the code the user pasted back
+ * @param state - the state that came with it, carrying the PKCE verifier
+ * @returns the account the token belongs to, or null when the exchange failed
+ */
+export async function exchangeClaude(code: string, state: string) {
   try {
     const { verifier } = decodeState(state);
     const startTime = Date.now();

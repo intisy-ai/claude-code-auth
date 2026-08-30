@@ -54,6 +54,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ClaudeProvider implements Provider, ConfigurableProvider, ModelCatalogProvider,
         QuotaProvider, OAuthProvider {
 
+    /** This provider's id, which a router matches a lane against. */
     public static final String ID = "claude-code-auth";
 
     // One orchestrator per backend (memoized): the orchestrator is stateless across requests --

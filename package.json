@@ -43,11 +43,12 @@
     ]
   },
   "scripts": {
-    "build": "node node_modules/@intisy/bayonet/scripts/teavm-build.mjs --java-dir . --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && node build.mjs",
-    "postbuild": "node dist/index.js readme",
+    "emit:teavm": "node node_modules/@intisy/bayonet/scripts/emit-dts.mjs --java-dir . --module :claude-teavm --out src/generated",
+    "build": "npm run emit:teavm && node node_modules/@intisy/bayonet/scripts/teavm-build.mjs --java-dir . --module :claude-teavm --out src/generated/claude-orchestrator.teavm.js && node build.mjs",
+    "test": "npm run build && npm run typecheck && vitest run",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && npm run build && vitest run",
-    "prepublishOnly": "npm run build"
+    "postbuild": "node dist/index.js readme"
   },
   "dependencies": {
     "@intisy-ai/anthropic-translator": "^1.0.2",

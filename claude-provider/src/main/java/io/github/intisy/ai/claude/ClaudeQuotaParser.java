@@ -36,6 +36,7 @@ public final class ClaudeQuotaParser {
 
     private final JsonCodec json;
 
+    /** @param json the codec its JSON-backed entry points parse with */
     public ClaudeQuotaParser(JsonCodec json) {
         this.json = json;
     }
@@ -49,6 +50,7 @@ public final class ClaudeQuotaParser {
      * (e.g. only a garbage/non-numeric field, or only a {@code status}) is dropped entirely --
      * matches the TS's post-loop cleanup pass exactly.
      *
+     * @param headers the response headers to read the pools out of
      * @return a map of pool-key -&gt; {@code {utilization: Double, reset: Long (epoch ms),
      *         status: String}} (only the keys that were actually captured are present).
      */
@@ -97,6 +99,9 @@ public final class ClaudeQuotaParser {
      * {@code "7d-<scope>"}; otherwise {@code kind || group}, optionally suffixed with the scope.
      * Returns {@code null} for a non-map {@code limit} or when neither {@code kind} nor
      * {@code group} is present.
+     *
+     * @param limit one entry of the usage endpoint's limits array
+     * @return the bucket key, or null when the limit names no bucket
      */
     @SuppressWarnings("unchecked")
     public static String bucketOfLimit(Map<String, Object> limit) {
@@ -142,6 +147,9 @@ public final class ClaudeQuotaParser {
      * {@code "7-day"}; a model-scoped bucket like {@code "7d-fable"} or {@code "7d_fable"} -&gt;
      * {@code "7-day (Fable)"}; anything not matching the {@code <digits><h|d>[-_<scope>]} shape
      * passes through unchanged (including {@code null}).
+     *
+     * @param bucket the bucket key
+     * @return its label
      */
     public static String poolLabel(String bucket) {
         if (bucket == null) return null;
@@ -169,6 +177,9 @@ public final class ClaudeQuotaParser {
      * skipped. Falls back to the pre-discovery cached shape ({@code fiveHour}/{@code sevenDay})
      * when {@code cachedQuota.pools} is absent. Returns {@code null} (TS: {@code undefined}) when
      * there is no cached quota at all, or the result would be empty.
+     *
+     * @param account the stored account, whose cached quota is read
+     * @return one entry per pool, or null when there is nothing to show
      */
     @SuppressWarnings("unchecked")
     public static List<Map<String, Object>> claudeQuota(Map<String, Object> account) {
@@ -218,6 +229,9 @@ public final class ClaudeQuotaParser {
      * to {@code [0, 1]}) and defers the "any pool with capacity left" decision to
      * {@link QuotaHealth#hasCapacity}, the single source shared with claude's own TS
      * {@code accounts-controller.ts} and antigravity's quota parser. Unknown/missing -&gt; false.
+     *
+     * @param account the stored account, whose cached quota is read
+     * @return whether at least one pool has capacity left
      */
     @SuppressWarnings("unchecked")
     public static boolean accountHasQuota(Map<String, Object> account) {
@@ -239,12 +253,20 @@ public final class ClaudeQuotaParser {
 
     // ---- JsonCodec-backed convenience entry points (the SPI use this class needs) -------------
 
+    /**
+     * @param limitJson one usage limit, as JSON
+     * @return it parsed, or null when the text was not an object
+     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> parseLimit(String limitJson) {
         Object parsed = json.parse(limitJson);
         return (parsed instanceof Map) ? (Map<String, Object>) parsed : null;
     }
 
+    /**
+     * @param limitJson one usage limit, as JSON
+     * @return its bucket key, or null when it names no bucket
+     */
     public String bucketOfLimitJson(String limitJson) {
         return bucketOfLimit(parseLimit(limitJson));
     }
@@ -255,10 +277,18 @@ public final class ClaudeQuotaParser {
         return (parsed instanceof Map) ? (Map<String, Object>) parsed : null;
     }
 
+    /**
+     * @param accountJson the stored account, as JSON
+     * @return one entry per pool, or null when there is nothing to show
+     */
     public List<Map<String, Object>> claudeQuotaJson(String accountJson) {
         return claudeQuota(parseAccount(accountJson));
     }
 
+    /**
+     * @param accountJson the stored account, as JSON
+     * @return whether at least one pool has capacity left
+     */
     public boolean accountHasQuotaJson(String accountJson) {
         return accountHasQuota(parseAccount(accountJson));
     }

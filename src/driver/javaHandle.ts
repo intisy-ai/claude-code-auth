@@ -1,4 +1,3 @@
-// @ts-nocheck
 // The claude request-serving implementation: runs the request through the TeaVM-compiled Java
 // ClaudeHandleOrchestrator. Loaded lazily (dynamic import in index.ts) so the ~MB TeaVM bundle
 // only evaluates on the first request, never at plugin registration. The Java orchestrator owns
@@ -6,11 +5,24 @@
 // over the real manager, building the final Response). The provider-facing entry point is the
 // IR-native handleIr; handleViaJavaOrchestrator is its internal transport/orchestration core.
 
-import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse, initCoreAuth } from "@intisy-ai/basekit/auth";
+import { proxyManager, getAutoCandidates, HandleIrError, lazyModule, safeJsonParse, initCoreAuth, type CoreAccount } from "@intisy-ai/basekit/auth";
 import { manager } from "./index.js";
 import { captureQuota, accountHasQuota } from "./accounts-controller.js";
 import { getMaxAttempts, getDefaultCooldownSeconds, getMaxCooldownSeconds } from "./settings.js";
+import { diagnostic } from "./diagnostics.js";
 import { anthropicTranslator } from "@intisy-ai/anthropic-translator";
+import type { HandlerCtx, IrRequest, IrResponse, IrStreamEvent } from "@intisy-ai/basekit/ir";
+
+/** What one attempt's prepared request looks like, as the orchestrator hands it back. */
+type PreparedAttempt = {
+  request: string;
+  method: string;
+  headers: Record<string, string>;
+  body: string;
+};
+
+/** A fetch init this runtime also honours a per-request proxy on. */
+type ProxiedInit = RequestInit & { proxy?: string };
 
 const PROVIDER_ID = "claude-code";
 const LANE = "messages"; // Claude subscription limits are account-wide
@@ -21,7 +33,7 @@ const claudeOrchestrator = lazyModule(() => import("../generated/claude-orchestr
 
 // Rebuild a Fetch `Headers` object from the header map the orchestrator hands back as JSON, so
 // the real `captureQuota` (which iterates `headers.forEach`) sees the same shape as the live path.
-function headersFromJson(headersJson) {
+function headersFromJson(headersJson: string): Headers {
   const obj = safeJsonParse(headersJson, {});
   const headers = new Headers();
   if (obj && typeof obj === "object") {
@@ -32,8 +44,19 @@ function headersFromJson(headersJson) {
   return headers;
 }
 
-export async function handleViaJavaOrchestrator(request, ctx) {
-  const log = (ctx && ctx.log) || (() => {});
+/**
+ * Serves one request through the whole attempt loop.
+ *
+ * @remarks
+ * The Java owns every decision; this owns what needs a host: the fetch and its IP-proxy fallback,
+ * account acquire and reporting over the real manager, and building the final response.
+ *
+ * @param request - the request as the caller built it
+ * @param ctx - the handler context, whose log is written to on a failure
+ * @returns the upstream response, retained verbatim so a stream stays intact, or a synthetic one
+ */
+export async function handleViaJavaOrchestrator(request: Request, ctx: HandlerCtx): Promise<Response> {
+  const log = diagnostic(ctx);
 
   // Defense-in-depth: manager.acquire(lane) already self-inits basekit/auth as the first action of
   // every attempt loop iteration, before any of the sync jsReports callbacks below can fire for
@@ -62,14 +85,14 @@ export async function handleViaJavaOrchestrator(request, ctx) {
   });
 
   // --- per-request host state (isolated to this call) ---------------------------------------
-  const responses = [];                 // retained live Response objects, indexed by attemptRef
-  const proxyByAccount = new Map();      // proxy URL used for each account this request
-  const acquiredByAccount = new Map();   // the acquired account object (fresh-lookup fallback)
+  const responses: Response[] = [];                                    // retained live Response objects, indexed by attemptRef
+  const proxyByAccount = new Map<string, string | null>();             // proxy URL used for each account this request
+  const acquiredByAccount = new Map<string, CoreAccount>();            // the acquired account object (fresh-lookup fallback)
 
   // jsAcquire: await manager.acquire(lane); null means no acquired account. When an
   // account exists but has no access token, return access:"" so the orchestrator's missing-access
   // branch fires with the "missing access token" reportError, not the no-account branch.
-  const jsAcquire = async (lane) => {
+  const jsAcquire = async (lane: string): Promise<string | null> => {
     const acquired = await manager.acquire(lane);
     if (!acquired || !acquired.account) return null;
     acquiredByAccount.set(acquired.account.id, acquired.account);
@@ -80,16 +103,16 @@ export async function handleViaJavaOrchestrator(request, ctx) {
   // reportResult(false)+retry-direct → on direct/no-proxy error return transportFailed → on
   // success reportResult(true, ms) if a proxy was used. Retains the live Response host-side;
   // only {status, headers} cross to Java. No body is ever read here.
-  const jsExec = async (accountId, preparedJson) => {
-    const prepared = safeJsonParse(preparedJson, {});
+  const jsExec = async (accountId: string, preparedJson: string): Promise<string> => {
+    const prepared = safeJsonParse(preparedJson, {}) as PreparedAttempt;
     const url = prepared.request;
-    const init = { method: prepared.method, headers: prepared.headers, body: prepared.body };
+    const init: ProxiedInit = { method: prepared.method, headers: prepared.headers, body: prepared.body };
 
     const proxyUrl = proxyManager.selectForAccount(accountId, PROVIDER_ID);
     proxyByAccount.set(accountId, proxyUrl || null);
     if (proxyUrl) init.proxy = proxyUrl; // Bun fetch honors .proxy
 
-    let response;
+    let response: Response;
     const started = Date.now();
     let proxyOk = false;
     try {
@@ -113,7 +136,7 @@ export async function handleViaJavaOrchestrator(request, ctx) {
         return JSON.stringify({ status: 0, headers: {}, transportFailed: true, attemptRef: -1 });
       }
     }
-    if (proxyOk) proxyManager.reportResult(proxyUrl, true, Date.now() - started);
+    if (proxyOk && proxyUrl) proxyManager.reportResult(proxyUrl, true, Date.now() - started);
 
     const attemptRef = responses.push(response) - 1;
     return JSON.stringify({
@@ -126,31 +149,33 @@ export async function handleViaJavaOrchestrator(request, ctx) {
 
   // jsReports: the synchronous account-reporting callbacks over the real `manager`.
   const jsReports = {
-    reportError(accountId, lane, attempt, message) {
+    reportError(accountId: string, lane: string, attempt: number, message: string) {
       manager.reportError(accountId, lane, attempt, message);
     },
     // Re-fire the proxy signal: after manager.reportRateLimit, if a proxy was used for this
     // account, re-fire proxyManager.reportRateLimit with the ipSuspected quality signal derived
     // from the fresh account state. This signal must not be dropped.
-    reportRateLimit(accountId, lane, resetMsJson) {
-      const resetMs = JSON.parse(resetMsJson); // number | null
-      manager.reportRateLimit(accountId, lane, resetMs);
+    reportRateLimit(accountId: string, lane: string, resetMsJson: string) {
+      const resetMs = JSON.parse(resetMsJson) as number | null;
+      // The orchestrator always computes a reset, falling back to its own backoff when the upstream
+      // sent no header, so a null here would be a broken contract rather than a missing value.
+      if (resetMs !== null) manager.reportRateLimit(accountId, lane, resetMs);
       const proxyUrl = proxyByAccount.get(accountId);
       if (proxyUrl) {
         const fresh = manager.list().find((a) => a.id === accountId) || acquiredByAccount.get(accountId);
         proxyManager.reportRateLimit(proxyUrl, { ipSuspected: accountHasQuota(fresh) });
       }
     },
-    reportSuccess(accountId) {
+    reportSuccess(accountId: string) {
       manager.reportSuccess(accountId);
     },
-    disable(accountId, reason) {
+    disable(accountId: string, reason: string) {
       manager.mutate(accountId, (a) => { a.enabled = false; a.disabledReason = reason; });
     },
-    listEnabledCount() {
+    listEnabledCount(): number {
       return manager.list().filter((a) => a.enabled !== false).length;
     },
-    captureQuota(accountId, headersJson) {
+    captureQuota(accountId: string, headersJson: string) {
       captureQuota(manager, accountId, headersFromJson(headersJson));
     },
   };
@@ -203,7 +228,7 @@ export { HandleIrError };
  * body through the IR (see its own comment above), mirroring basekit/proxy's own reference handleIr
  * contract, where a provider signals failure by throwing, not by returning IR.
  */
-export async function handleIr(ir, ctx) {
+export async function handleIr(ir: IrRequest, ctx: HandlerCtx): Promise<IrResponse | ReadableStream<IrStreamEvent>> {
   const bodyText = await anthropicTranslator.encodeRequest(ir);
   const request = new Request(IR_SYNTHETIC_URL, {
     method: "POST",

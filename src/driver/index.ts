@@ -1,10 +1,10 @@
-// @ts-nocheck
 // The claude-code driver: a thin object on top of basekit/auth. basekit/auth owns
 // account storage, selection, token refresh, and rate-limit/cooldown state; this
 // driver owns only the Anthropic request rewrite (Bearer OAuth + Claude Code
 // system block) and rotation across subscription accounts.
 
-import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups, type ProviderSettingsSchema, type ProviderSort } from "@intisy-ai/basekit/auth";
+import { AccountManager, toSettingsGroups, retryBackoffSettingsGroups, type ProviderCtx, type ProviderModel, type ProviderSettingsSchema, type ProviderSort } from "@intisy-ai/basekit/auth";
+import type { HandlerCtx, IrRequest, IrResponse, IrStreamEvent } from "@intisy-ai/basekit/ir";
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, ANTHROPIC_OAUTH_BETA } from "../constants.js";
 import { models } from "./models.js";
 import { oauthConfig } from "./config.js";
@@ -23,8 +23,10 @@ const PROVIDER_ID = "claude-code";
 
 // Retry/backoff key names claude-code has always used; kept as-is (not unified with
 // antigravity's own key names) so an existing user's config value is never silently dropped.
+/** The setting keys the shared retry-backoff group is rendered from. */
 export const RETRY_KEYS = { baseKey: "default_cooldown_seconds", maxKey: "max_cooldown_seconds" };
 
+/** What this provider can be told, as a settings editor renders it. */
 export const CLAUDE_SETTINGS_SCHEMA: ProviderSettingsSchema = [
   {
     title: "Account rotation",
@@ -59,7 +61,7 @@ export { manager };
 
 // The IR-native serving path (see javaHandle.js's handleIr for the real implementation). The
 // front-door owns app<->IR translation, so the provider exposes only this, never a wire handle().
-async function handleIr(ir, ctx) {
+async function handleIr(ir: IrRequest, ctx: HandlerCtx): Promise<IrResponse | ReadableStream<IrStreamEvent>> {
   const { handleIr: handleIrImpl } = await import("./javaHandle.js");
   return handleIrImpl(ir, ctx);
 }
@@ -69,8 +71,9 @@ async function handleIr(ir, ctx) {
 // static fallback. basekit/auth's resolveProviderModels calls this when an account exists
 // and falls back to the static `models` above on null/failure. Uses ensureAccess (no
 // rotation side effects) rather than acquire().
-async function fetchModels(ctx) {
-  const log = (ctx && ctx.log) || (() => {});
+async function fetchModels(ctx: ProviderCtx & { hasAccounts: boolean }): Promise<{ models: Record<string, ProviderModel> } | null> {
+  // ProviderCtx's log is a plain function, unlike HandlerCtx's Logger object.
+  const log = ctx?.log ?? (() => {});
   let access;
   try {
     const accounts = (manager.load().accounts || []).filter((a) => a && a.enabled !== false);
@@ -89,8 +92,8 @@ async function fetchModels(ctx) {
     if (!res.ok) { log("fetchModels: /v1/models returned " + res.status); return null; }
     const data = await res.json();
     const list = (data && data.data) || [];
-    const out = {};
-    for (const model of list) {
+    const out: Record<string, ProviderModel> = {};
+    for (const model of list as Array<{ id?: string; display_name?: string }>) {
       if (!model || !model.id || !String(model.id).startsWith("claude-")) continue;
       out[model.id] = { name: (model.display_name || model.id) + " (Claude Code)" };
     }
@@ -99,6 +102,7 @@ async function fetchModels(ctx) {
   } catch (error) { log("fetchModels failed: " + error); return null; }
 }
 
+/** What this provider offers a host: its models, how to serve one, how to log in, and its settings. */
 export const driver = {
   id: PROVIDER_ID,
   label: "Claude Code",
@@ -114,13 +118,13 @@ export const driver = {
   proxies: true,
   settings: {
     groups: [...toSettingsGroups(CLAUDE_SETTINGS_SCHEMA), ...retryBackoffSettingsGroups(RETRY_KEYS)],
-    get: (key) => {
+    get: (key: string) => {
       if (key === "max_account_attempts") return getMaxAttempts();
       if (key === "account_selection_strategy") return getSelection();
       if (key === "default_cooldown_seconds") return getDefaultCooldownSeconds();
       if (key === "max_cooldown_seconds") return getMaxCooldownSeconds();
       return getSetting(key, undefined);
     },
-    set: (key, value) => setSetting(key, value),
+    set: (key: string, value: unknown) => setSetting(key, value),
   },
 };

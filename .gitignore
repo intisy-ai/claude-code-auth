@@ -1,7 +1,9 @@
 node_modules/
 dist/
 # TeaVM-compiled orchestrator ESM staged by core/teavm-build.mjs at build time, never committed.
-src/generated/
+# The TeaVM bundle is build output; the .d.ts emitted beside it from the same Java IS committed,
+# so the TypeScript seam type-checks on a clean clone before anything is built.
+src/generated/claude-orchestrator.teavm.js
 .DS_Store
 .env
 npm-debug.log*

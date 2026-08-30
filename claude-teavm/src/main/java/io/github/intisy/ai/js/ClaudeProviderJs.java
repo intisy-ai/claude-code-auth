@@ -19,24 +19,28 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * TeaVM JS export surface over claude-code-auth's Java classes: proves {@code
- * AnthropicRequestTranslator}, {@code ClaudeQuotaParser}, {@code ClaudeModelRouting}, and {@code
- * ClaudeHandleOrchestrator} are ALL TeaVM-transpilable ({@code generateJavaScript} green),
- * mirroring stub-auth's {@code StubProviderJs} pattern. Lives in the SAME package ({@code
- * io.github.intisy.ai.js}) as core-proxy's {@code :teavm} module (a Gradle project dependency, see
- * {@code claude-teavm/build.gradle}), so {@code SimpleJsonCodec} is referenced unqualified exactly
- * like {@code CoreProxyJs}/{@code StubProviderJs} do, not duplicated here.
+ * The JS export surface over claude-code-auth's Java: the request rewrite, the quota rules, the
+ * model routing and the whole attempt loop.
  *
- * <p>Every export below calls straight into the JVM-side classes: ONE Java method, compiled
- * twice (javac for {@code :claude-provider}'s jar, TeaVM for this module), so this is a thin
- * touch-surface, not a reimplementation. This module only proves transpilability; it does not
- * wire this JS into claude-code-auth's TS runtime.
+ * <p>Every export calls straight into the JVM-side classes, so each is ONE Java method compiled
+ * twice, by javac for {@code :claude-provider}'s jar and by TeaVM for this bundle. There is no
+ * second implementation anywhere: {@code src/driver} reaches all of it through here.
+ *
+ * @implNote {@code io.github.intisy.ai.js.surface.ClaudeProviderSurface} declares what this exports
+ * for a TypeScript consumer, because JSPromise, JSString and the three JSO functors mean nothing to
+ * one. This class lives in the same package as the shared {@code :js-base} seam so
+ * {@code SimpleJsonCodec} is referenced unqualified rather than duplicated.
  */
 public final class ClaudeProviderJs {
     private ClaudeProviderJs() {
     }
 
-    /** Exercises {@link AnthropicRequestTranslator#mergeBeta}. */
+    /**
+     * The beta header this provider must send, merged with whatever the caller already set.
+     *
+     * @param existing the caller's own beta header, which may be empty
+     * @return the merged header value
+     */
     @JSExport
     public static String mergeBeta(String existing) {
         return AnthropicRequestTranslator.mergeBeta(existing);
@@ -48,6 +52,9 @@ public final class ClaudeProviderJs {
      * {@link AnthropicRequestTranslator#ensureClaudeCodeSystemBlocks}, and re-encodes it, proving
      * core-ir's translator (and this module's :ir dependency) is itself transpilable, not just
      * {@code AnthropicRequestTranslator}'s own pure functions.
+     *
+     * @param bodyJson the request body, as JSON
+     * @return the body with the system prompt applied, as JSON
      */
     @JSExport
     public static String ensureClaudeCodeSystemJson(String bodyJson) {
@@ -58,20 +65,35 @@ public final class ClaudeProviderJs {
         return translator.encodeRequest(ir);
     }
 
-    /** Exercises {@link ClaudeQuotaParser#poolLabel}. */
+    /**
+     * What a surface shows for one quota bucket.
+     *
+     * @param bucket the bucket's id
+     * @return its display label
+     */
     @JSExport
     public static String poolLabel(String bucket) {
         return ClaudeQuotaParser.poolLabel(bucket);
     }
 
-    /** Exercises {@link ClaudeQuotaParser#accountHasQuotaJson} (its {@link JsonCodec}-backed entry point). */
+    /**
+     * Whether an account has quota left to serve a request.
+     *
+     * @param accountJson the stored account, as JSON
+     * @return true when at least one pool has capacity
+     */
     @JSExport
     public static boolean accountHasQuota(String accountJson) {
         ClaudeQuotaParser parser = new ClaudeQuotaParser(new SimpleJsonCodec());
         return parser.accountHasQuotaJson(accountJson);
     }
 
-    /** Exercises {@link ClaudeQuotaParser#bucketOfLimitJson}. */
+    /**
+     * Which quota bucket a usage limit belongs to.
+     *
+     * @param limitJson one entry of the usage endpoint's limits array, as JSON
+     * @return the bucket's id, or null when the limit names no bucket
+     */
     @JSExport
     public static String bucketOfLimit(String limitJson) {
         ClaudeQuotaParser parser = new ClaudeQuotaParser(new SimpleJsonCodec());
@@ -80,26 +102,49 @@ public final class ClaudeProviderJs {
 
     // ---- ClaudeModelRouting + ClaudeHandleOrchestrator ---------------------------------------------
 
-    /** Exercises {@link ClaudeModelRouting#isRateLimitStatus}. */
+    /**
+     * Whether a status means the upstream rate-limited the request.
+     *
+     * @param status the HTTP status
+     * @return true when it is a rate limit rather than another failure
+     */
     @JSExport
     public static boolean isRateLimitStatus(int status) {
         return ClaudeModelRouting.isRateLimitStatus(status);
     }
 
-    /** Exercises {@link ClaudeModelRouting#resolveAutoModel} plus the {@link JsonCodec} SPI. */
+    /**
+     * Which model an automatic selection resolves to.
+     *
+     * @param bodyJson the request body, as JSON
+     * @param ctxModel the model the router assigned, or empty
+     * @param topAutoCandidate the leaderboard's first choice, which stays the host's to rank
+     * @return the body naming a concrete model, as JSON
+     */
     @JSExport
     public static String resolveAutoModel(String bodyJson, String ctxModel, String topAutoCandidate) {
         return ClaudeModelRouting.resolveAutoModel(new SimpleJsonCodec(), bodyJson, ctxModel, topAutoCandidate);
     }
 
-    /** Exercises {@link ClaudeModelRouting#applyAssignedModel} (no-op logger). */
+    /**
+     * The request body with the assigned model written into it.
+     *
+     * @param bodyJson the request body, as JSON
+     * @param ctxModel the model the router assigned, or empty
+     * @return the body naming the model it will be served as, as JSON
+     */
     @JSExport
     public static String applyAssignedModel(String bodyJson, String ctxModel) {
         return ClaudeModelRouting.applyAssignedModel(new SimpleJsonCodec(), bodyJson, ctxModel,
                 NoopLogger.INSTANCE);
     }
 
-    /** Exercises {@link ClaudeModelRouting#fetchModelsMapping}. */
+    /**
+     * The upstream model list mapped into the shape a surface lists.
+     *
+     * @param modelsJson what the upstream answered, as JSON
+     * @return the models as a JSON object keyed by model id
+     */
     @JSExport
     public static String fetchModelsMapping(String modelsJson) {
         return ClaudeModelRouting.fetchModelsMapping(new SimpleJsonCodec(), modelsJson);
@@ -111,7 +156,9 @@ public final class ClaudeProviderJs {
      * enabled accounts) -- exercises the orchestrator class itself (construction, the retry loop's
      * first iteration, the synthetic-400 branch, and the {@link JsonCodec}-backed body builders)
      * under TeaVM, proving the whole state machine -- not just the pure {@code ClaudeModelRouting}
-     * helpers above -- is transpilable. Returns the synthesized JSON body.
+     * helpers above -- is transpilable.
+     *
+     * @return the synthesized JSON body the orchestrator answers a no-account request with
      */
     @JSExport
     public static String handleNoAccountSmokeTest() {

@@ -39,9 +39,13 @@ import java.util.regex.Pattern;
  */
 public final class AnthropicRequestTranslator {
 
+    /** The upstream every request is rewritten onto. */
     public static final String ANTHROPIC_API_BASE = "https://api.anthropic.com";
+    /** The API version every request declares. */
     public static final String ANTHROPIC_VERSION = "2023-06-01";
+    /** The beta flag a subscription OAuth token needs. */
     public static final String ANTHROPIC_OAUTH_BETA = "oauth-2025-04-20";
+    /** The identity block a subscription request must lead its system prompt with. */
     public static final String CLAUDE_CODE_SYSTEM = "You are Claude Code, Anthropic's official CLI for Claude.";
 
     private AnthropicRequestTranslator() {
@@ -58,6 +62,7 @@ public final class AnthropicRequestTranslator {
      * string, and a block array all decode through {@code AnthropicRequestCodec} to either
      * {@code null}/empty or a {@code List<Block>}.
      *
+     * @param system the caller's own system blocks, which may be null or empty
      * @return {@code [identity]} when {@code system} is {@code null}/empty; {@code system}
      *     unchanged when it already starts with the identity block; otherwise the identity block
      *     prepended.
@@ -103,7 +108,12 @@ public final class AnthropicRequestTranslator {
 
     // ---- mergeBeta ------------------------------------------------------------------------------
 
-    /** Appends {@link #ANTHROPIC_OAUTH_BETA} to an existing header value, deduped by substring. */
+    /**
+     * Appends {@link #ANTHROPIC_OAUTH_BETA} to an existing header value, deduped by substring.
+     *
+     * @param existing the caller's own beta header, which may be empty
+     * @return the merged header value
+     */
     public static String mergeBeta(String existing) {
         if (JsCoercion.isFalsyString(existing)) return ANTHROPIC_OAUTH_BETA;
         // A SUBSTRING match, not a comma-list-membership check: e.g.
@@ -114,20 +124,27 @@ public final class AnthropicRequestTranslator {
 
     // ---- prepareClaudeRequest --------------------------------------------------------------------
 
-    /** Mirrors the TS {@code init} shape: {@code {method, headers, body}}. */
+    /** One request as the host hands it over: its method, headers and body. */
     public static final class RequestInit {
+        /** The HTTP method. */
         public String method;
+        /** The headers. */
         public Map<String, String> headers;
+        /** The body, or null when there is none. */
         public String body;
     }
 
-    /** Mirrors the TS return shape: {@code {request, init, streaming}}. */
+    /** One request rewritten onto the Anthropic API, ready for the host to send. */
     public static final class PreparedRequest {
+        /** The absolute url to send it to. */
         public String request;
+        /** The HTTP method. */
         public String method;
+        /** The headers, carrying the account's credentials. */
         public Map<String, String> headers;
         /** {@code null} when stripped for a GET/HEAD method (undici rejects a body on those). */
         public String body;
+        /** Whether the request asked for a streamed answer. */
         public boolean streaming;
     }
 
@@ -150,6 +167,9 @@ public final class AnthropicRequestTranslator {
      *               resolution algorithm (dot-segment removal, percent-encoding, etc.) -- noted
      *               as an intentional TeaVM-safety-driven simplification, since the loader never
      *               calls this with a bare origin or an exotic relative reference.
+     * @param init      the request as the host hands it over
+     * @param access    the account's access token
+     * @return          the rewritten request, ready to send
      */
     public static PreparedRequest prepareClaudeRequest(JsonCodec json, String url, RequestInit init, String access) {
         String path = pathOf(url);
@@ -247,6 +267,7 @@ public final class AnthropicRequestTranslator {
      * @param nowMillis the current time in epoch ms, taken as an explicit parameter (instead of
      *                  reading a clock internally) so parity tests stay fully deterministic --
      *                  this mirrors the TS's implicit {@code Date.now()} call.
+     * @return          when the limit resets, in epoch ms, or null when no header said
      */
     public static Long parseResetMs(Map<String, String> headers, long nowMillis) {
         String unified = getHeaderCI(headers, "anthropic-ratelimit-unified-reset");

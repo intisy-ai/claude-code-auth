@@ -46,6 +46,10 @@ public final class ClaudeHandleOrchestrator {
     private final JsonCodec json;
     private final Clock clock;
 
+    /**
+     * @param json the codec this orchestrator parses and builds with
+     * @param clock where it reads the current time from, so a test can hold it still
+     */
     public ClaudeHandleOrchestrator(JsonCodec json, Clock clock) {
         this.json = json;
         this.clock = clock;
@@ -59,12 +63,19 @@ public final class ClaudeHandleOrchestrator {
      * Only the decision-relevant summary comes back.
      */
     public interface AttemptExecutor {
+        /**
+         * @param accountId the account to attempt with
+         * @param prepared the request to send, already carrying that account's credentials
+         * @return what the attempt produced
+         */
         AttemptResult execute(String accountId, AnthropicRequestTranslator.PreparedRequest prepared);
     }
 
     /** Result of one {@link AttemptExecutor#execute} call. */
     public static final class AttemptResult {
+        /** The HTTP status, or 0 when the transport never got one. */
         public final int status;
+        /** The response headers, empty when the transport never got a response. */
         public final Map<String, String> headers;
         /**
          * True when the host exhausted every transport strategy (proxy + direct retry) for this
@@ -77,6 +88,12 @@ public final class ClaudeHandleOrchestrator {
         /** Opaque host-supplied handle the host uses to map back to its retained live response. */
         public final Object attemptRef;
 
+        /**
+         * @param status the HTTP status, or 0 when the transport never got one
+         * @param headers the response headers
+         * @param transportFailed whether every transport strategy was exhausted without a response
+         * @param attemptRef the host's handle back to its retained live response
+         */
         public AttemptResult(int status, Map<String, String> headers, boolean transportFailed, Object attemptRef) {
             this.status = status;
             this.headers = headers;
@@ -91,30 +108,74 @@ public final class ClaudeHandleOrchestrator {
      * implements it (parity tests supply a recording fake).
      */
     public interface AccountOps {
-        /** {@code manager.acquire(lane)}. {@code null} &lt;=&gt; the TS's {@code !acquired || !acquired.account}. */
+        /**
+         * Takes the next account to attempt with.
+         *
+         * @param lane the lane to acquire for
+         * @return the account, or null when none is free
+         */
         Acquired acquire(String lane);
 
+        /**
+         * One attempt failed for a reason that is not a rate limit.
+         *
+         * @param accountId the account that failed
+         * @param lane the lane it failed on
+         * @param attempt which attempt this was, counting from one
+         * @param message what went wrong
+         */
         void reportError(String accountId, String lane, int attempt, String message);
 
+        /**
+         * One attempt hit the upstream rate limit.
+         *
+         * @param accountId the account that was limited
+         * @param lane the lane it was limited on
+         * @param resetMs when the limit resets, which this orchestrator always computes
+         */
         void reportRateLimit(String accountId, String lane, Long resetMs);
 
+        /**
+         * One attempt served the request.
+         *
+         * @param accountId the account that served it
+         */
         void reportSuccess(String accountId);
 
-        /** {@code manager.mutate(accountId, a => { a.enabled = false; a.disabledReason = reason; })}. */
+        /**
+         * Takes an account out of rotation.
+         *
+         * @param accountId the account to disable
+         * @param reason why it is being disabled, which a surface shows
+         */
         void disable(String accountId, String reason);
 
-        /** {@code manager.list().filter(a => a.enabled !== false).length}. */
+        /**
+         * @return how many accounts are still in rotation, which decides whether to attempt again
+         */
         int listEnabledCount();
 
-        /** {@code captureQuota(manager, accountId, headers)}, called on every non-transport-failed response. */
+        /**
+         * Records what the upstream said about an account's remaining quota, on every response that
+         * arrived at all.
+         *
+         * @param accountId the account the response was for
+         * @param headers the response's headers
+         */
         void captureQuota(String accountId, Map<String, String> headers);
     }
 
     /** {@code {account: {id}, access}} as returned by {@code manager.acquire}. */
     public static final class Acquired {
+        /** The account's id. */
         public final String accountId;
+        /** Its access token, empty when it has none yet. */
         public final String access;
 
+        /**
+         * @param accountId the account's id
+         * @param access its access token, empty when it has none yet
+         */
         public Acquired(String accountId, String access) {
             this.accountId = accountId;
             this.access = access;
@@ -125,8 +186,11 @@ public final class ClaudeHandleOrchestrator {
 
     /** Everything {@code handle(request, ctx)} needed from the inbound request + router ctx. */
     public static final class RequestInputs {
+        /** The request's url. */
         public String url;
+        /** Its HTTP method. */
         public String method;
+        /** Its headers. */
         public Map<String, String> headers;
         /** {@code await request.clone().text()}, already read by the host; {@code null} on a read failure. */
         public String bodyText;
@@ -166,8 +230,15 @@ public final class ClaudeHandleOrchestrator {
      * {@code Response} and streams (SSE intact).
      */
     public static final class HandleDecision {
-        public enum Kind { SERVE, SYNTHETIC }
+        /** Whether the host serves an attempt it retained, or answers with a body built here. */
+        public enum Kind {
+            /** Serve the retained response {@code attemptRef} names. */
+            SERVE,
+            /** Answer with the status, headers and body carried here. */
+            SYNTHETIC
+        }
 
+        /** Which of the two answers this is. */
         public final Kind kind;
         /** Set only for {@link Kind#SERVE}. */
         public final Object attemptRef;
@@ -186,10 +257,20 @@ public final class ClaudeHandleOrchestrator {
             this.body = body;
         }
 
+        /**
+         * @param attemptRef the host's handle to the response it retained
+         * @return the decision to serve it
+         */
         public static HandleDecision serve(Object attemptRef) {
             return new HandleDecision(Kind.SERVE, attemptRef, 0, null, null);
         }
 
+        /**
+         * @param status the status to answer with
+         * @param headers the headers to answer with
+         * @param body the body to answer with
+         * @return the decision to answer with them
+         */
         public static HandleDecision synthetic(int status, Map<String, String> headers, String body) {
             return new HandleDecision(Kind.SYNTHETIC, null, status, headers, body);
         }
@@ -201,6 +282,12 @@ public final class ClaudeHandleOrchestrator {
      * Implements {@code handle}'s decision flow: pre-loop body prep, then the retry loop over
      * {@code cfg.maxAttempts}, branching on each attempt's outcome in the same order as the TS
      * driver: rate-limit before 401 before 403 before success before "surface as-is".
+     *
+     * @param in what arrived with the request
+     * @param cfg how many attempts to make and how long to cool an account down for
+     * @param exec the host's transport, which runs one attempt
+     * @param accounts the host's account rotation and reporting
+     * @return which attempt to serve, or the response to answer with instead
      */
     public HandleDecision handle(RequestInputs in, OrchestratorConfig cfg, AttemptExecutor exec, AccountOps accounts) {
         Logger log = in.log != null ? in.log : NOOP_LOGGER;

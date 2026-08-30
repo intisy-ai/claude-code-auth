@@ -38,6 +38,10 @@ public final class JsAccountOpsBridge implements ClaudeHandleOrchestrator.Accoun
      */
     @JSFunctor
     public interface JsAcquireFn extends JSObject {
+        /**
+         * @param lane the lane to acquire an account for
+         * @return a promise of the account as JSON, or of null when none is free
+         */
         JSPromise<JSString> acquire(JSString lane);
     }
 
@@ -52,16 +56,37 @@ public final class JsAccountOpsBridge implements ClaudeHandleOrchestrator.Accoun
      * missing reset.
      */
     public interface JsReportFns extends JSObject {
+        /**
+         * @param accountId the account that failed
+         * @param lane the lane it failed on
+         * @param attempt which attempt this was, counting from one
+         * @param message what went wrong
+         */
         void reportError(JSString accountId, JSString lane, int attempt, JSString message);
 
+        /**
+         * @param accountId the account that was limited
+         * @param lane the lane it was limited on
+         * @param resetMsJson when the limit resets, as JSON, or {@code "null"} when none was given
+         */
         void reportRateLimit(JSString accountId, JSString lane, JSString resetMsJson);
 
+        /** @param accountId the account that served the request */
         void reportSuccess(JSString accountId);
 
+        /**
+         * @param accountId the account to take out of rotation
+         * @param reason why it is being disabled
+         */
         void disable(JSString accountId, JSString reason);
 
+        /** @return how many accounts are still in rotation */
         int listEnabledCount();
 
+        /**
+         * @param accountId the account the response was for
+         * @param headersJson the response headers, as a JSON object
+         */
         void captureQuota(JSString accountId, JSString headersJson);
     }
 
@@ -69,6 +94,11 @@ public final class JsAccountOpsBridge implements ClaudeHandleOrchestrator.Accoun
     private final JsReportFns jsReports;
     private final JsonCodec json;
 
+    /**
+     * @param jsAcquire the host's account rotation
+     * @param jsReports what this bridge tells the host about each attempt
+     * @param json the codec this bridge serialises and parses with
+     */
     public JsAccountOpsBridge(JsAcquireFn jsAcquire, JsReportFns jsReports, JsonCodec json) {
         this.jsAcquire = jsAcquire;
         this.jsReports = jsReports;
